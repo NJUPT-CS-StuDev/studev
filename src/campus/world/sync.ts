@@ -47,8 +47,8 @@ export function startSync() {
         running = true;
         const generation = window.localStorage.getItem('studev_session_generation');
         try {
-            const [{ api, session }, { readTasks, writeTasks }, { readPreferences, writePreferences }] = await Promise.all([import('../../platform/client/api'), import('./tasks'), import('./preferences')]);
-            if (!await session()) return;
+            const [{ api, requestSession }, { readTasks, writeTasks }, { readPreferences, writePreferences }] = await Promise.all([import('../../platform/client/api'), import('./tasks'), import('./preferences')]);
+            if (!await requestSession()) return;
             const reply = await api<{ tasks: Task[]; settings: Settings }>('/sync', { tasks: readTasks(), settings: settingsOf(readPreferences()) });
             // A reply for a session that was signed out or replaced cannot be adopted by its successor.
             if (!window.localStorage.getItem('studev_auth_user') || generation !== window.localStorage.getItem('studev_session_generation')) return;

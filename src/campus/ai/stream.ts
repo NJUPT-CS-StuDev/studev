@@ -1,7 +1,7 @@
 // Asking the model, its answer read as it comes. Through the platform, its events are `delta` (the next piece of what
 // it says), then `message` (the whole turn, tool calls put together) or `error`. With one's own key, the provider is
 // asked straight from this device and its stream read the same way the platform reads it (assistant.mjs).
-import { session } from '../../platform/client/api';
+import { requestSession, session, type Session } from '../../platform/client/api';
 import { Completion, completionRequest, type Situation, type ToolContext } from '@/world/assistant.mjs';
 import { addressError, endpoint, type Own } from './model';
 
@@ -13,15 +13,25 @@ export class AskError extends Error {}
 /** The platform checks the session and quota. Only the campus context goes to the model. */
 export async function ask(messages: Message[], situation: Situation, last: boolean, onDelta: (text: string) => void, signal: AbortSignal, context: ToolContext = {}): Promise<Message> {
     // Reading the session also renews it when its short-lived pass has run out.
-    const current = await session();
+    const current = await requestSession();
     if (!current) throw new AskError('请先登录。');
-    const response = await fetch('/api/platform/ai', { method: 'POST', credentials: 'same-origin', cache: 'no-store', signal,
-        headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream', 'X-CSRF-Token': current.csrfToken }, body: JSON.stringify({ messages, last, situation,
-            toolNames: context.tools?.map(tool => tool.function.name), externalTools: (context.external ?? context.tools)?.filter(tool => tool.function.name.startsWith('mcp_')), preferredTools: context.preferred, reach: context.reach }) });
-    if (!response.ok || !response.body) {
-        const body = await response.json().catch(() => null) as { error?: { message?: string } } | null;
-        throw new AskError(body?.error?.message ?? 'AI 暂时无法响应，请稍后重试。');
+    const body = JSON.stringify({ messages, last, situation, toolNames: context.tools?.map(tool => tool.function.name),
+        externalTools: (context.external ?? context.tools)?.filter(tool => tool.function.name.startsWith('mcp_')), preferredTools: context.preferred, reach: context.reach });
+    const send = (proof: Session) => fetch('/api/platform/ai', { method: 'POST', credentials: 'same-origin', cache: 'no-store', signal,
+        headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream', 'X-CSRF-Token': proof.csrfToken }, body });
+    const explain = async (response: Response) => (await response.json().catch(() => null) as { error?: { code?: string; message?: string } } | null)?.error;
+    let response = await send(current);
+    let error = !response.ok ? await explain(response) : undefined;
+    // These rejections happen before the platform spends quota or calls the model.
+    if (response.status === 401 && (error?.code === 'TOKEN_INVALID' || error?.code === 'AUTH_REQUIRED')) {
+        signal.throwIfAborted();
+        const refreshed = await session();
+        signal.throwIfAborted();
+        if (refreshed?.user.id !== current.user.id) throw new AskError('请重新登录后再发送。');
+        response = await send(refreshed);
+        error = !response.ok ? await explain(response) : undefined;
     }
+    if (!response.ok || !response.body) throw new AskError(error?.message ?? 'AI 暂时无法响应，请稍后重试。');
     const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
     let pending = '';
     for (let read = await reader.read(); !read.done; read = await reader.read()) {

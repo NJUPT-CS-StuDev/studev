@@ -8,7 +8,7 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { suggestions } from '@/world/assistant.json';
 import tokens from '../../../design/tokens.json';
-import { session } from '../../platform/client/api';
+import { requestSession, session } from '../../platform/client/api';
 import { usePreferences } from '@/world/usePreferences';
 import { useTasks } from '@/world/useTasks';
 import { newTaskId, readTasks, saveTask } from '@/world/tasks';
@@ -440,6 +440,7 @@ export default function AiApp() {
         return () => { window.removeEventListener(TOOL_SETTINGS_CHANGED, refresh); window.removeEventListener('storage', refresh); };
     }, []);
     useEffect(() => {
+        if (!utility && !runtime && !(canUseBrowser && toolPreferences.runtime)) return;
         const controller = new AbortController();
         void Promise.all([listBrowserTools(controller.signal), runtimeModels(controller.signal).catch(() => [])]).then(([tools, models]) => {
             if (controller.signal.aborted) return;
@@ -451,7 +452,7 @@ export default function AiApp() {
             setBrowserTools([]);
         });
         return () => controller.abort();
-    }, [canUseBrowser, toolPreferences, utility]);
+    }, [canUseBrowser, runtime, toolPreferences.runtime, utility]);
     useEffect(() => {
         let loading: AbortController | undefined;
         function refresh() {
@@ -978,7 +979,7 @@ export default function AiApp() {
             await record();
         }
         try {
-            if (options.signIn && !await session()) {
+            if (options.signIn && !await requestSession()) {
                 if (controller.signal.aborted) return;
                 view.waiting = options.signIn;
                 if (activeChat.current === origin) window.open(`/login/?next=${encodeURIComponent('/signed-in/')}`, '_blank');
@@ -987,9 +988,8 @@ export default function AiApp() {
             controller.signal.throwIfAborted();
             if (options.clearDraft) view.draft = '';
             await record();
-            await docReady();
             const probeRuntime = async (): Promise<LocalRuntimeSnapshot> => {
-                const needLive = runtimeStatusRef.current.state === 'unknown' || Boolean(canUseBrowser && preferences.runtime);
+                const needLive = (runtime && runtimeStatusRef.current.state === 'unknown') || (canUseBrowser && preferences.runtime);
                 if (!needLive) return runtimeStatusRef.current;
                 const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(2500)]);
                 try {
@@ -1002,6 +1002,7 @@ export default function AiApp() {
             const [runtimeNow, external] = await Promise.all([
                 probeRuntime(),
                 activeRemoteTools(AbortSignal.any([controller.signal, AbortSignal.timeout(4500)])),
+                docReady(),
             ]);
             if (controller.signal.aborted) return;
             setRuntimeStatus(runtimeNow);

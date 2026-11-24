@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { api } from './api';
+import { api, requestSession } from './api';
 
 describe('account request renewal', () => {
     beforeEach(() => {
@@ -85,5 +85,22 @@ describe('account request renewal', () => {
         vi.stubGlobal('fetch', fetch);
         await expect(api('/auth/devices')).rejects.toMatchObject({ code: 'TOKEN_INVALID' });
         expect(fetch).toHaveBeenCalledTimes(3);
+    });
+
+    it('shares a recent session proof within a page and reads a new proof after switching accounts', async () => {
+        vi.stubGlobal('location', { pathname: '/ai/' });
+        const first = { user: { id: 'first', role: 'user' }, csrfToken: 'first-proof' };
+        const next = { user: { id: 'next', role: 'user' }, csrfToken: 'next-proof' };
+        const fetch = vi.fn().mockResolvedValueOnce(Response.json(first)).mockResolvedValueOnce(Response.json(next));
+        vi.stubGlobal('fetch', fetch);
+        await expect(Promise.all([requestSession(), requestSession()])).resolves.toEqual([first, first]);
+        await expect(requestSession()).resolves.toEqual(first);
+        expect(fetch).toHaveBeenCalledTimes(1);
+        localStorage.setItem('studev_session_generation', 'another-session');
+        await expect(requestSession()).resolves.toEqual(next);
+        expect(fetch).toHaveBeenCalledTimes(2);
+        localStorage.setItem('studev_session_refresh_pending', '1');
+        await expect(requestSession()).resolves.toBeNull();
+        expect(fetch).toHaveBeenCalledTimes(2);
     });
 });

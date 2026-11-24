@@ -64,10 +64,10 @@ export function aiMessages(input, externalNames = new Set()) {
 }
 
 /** The platform only proxies inference. Tools and personal writes execute on the person's device. */
-export function createAiService({ identity, repo, env, now = Date.now, fetcher = fetch }) {
+export function createAiService({ identity, repo, env, now = Date.now, fetcher = fetch, measure = (_name, run) => run() }) {
   return async function handle(context, path) {
     if (path !== '/api/platform/ai') return null;
-    const session = await identity.authenticate(context.request, { required: true, csrf: context.request.method === 'POST' });
+    const session = await measure('auth', () => identity.authenticate(context.request, { required: true, csrf: context.request.method === 'POST' }));
     if (context.request.method !== 'POST') fail(405, 'METHOD_NOT_ALLOWED', '不支持此请求方式。');
     if (POOL.some(member => !env[member.key])) fail(503, 'AI_NOT_CONFIGURED', 'AI 服务尚未配置。');
     const body = await readJson(context.request, 131072);
@@ -83,19 +83,21 @@ export function createAiService({ identity, repo, env, now = Date.now, fetcher =
     if (body.preferredTools !== undefined && (!Array.isArray(body.preferredTools) || body.preferredTools.length > 16 || body.preferredTools.some(name => !known(name)))) fail(400, 'AI_TOOLS_INVALID', '工具选择无效。');
     if (body.reach !== undefined && reachError(body.reach)) fail(400, 'AI_TOOLS_INVALID', '连接状态无效。');
     const available = [...toolsFor(situation), ...definitions].filter(tool => body.toolNames === undefined || body.toolNames.includes(tool.function.name));
-    await repo.throttle('ai-minute', session.user.id, 12);
-    // The free quota is shared by everyone; each person has a fair part of it a day, said only once it is used up.
-    try { await repo.throttle('ai-day', session.user.id, DAILY, 86400); }
-    catch (error) { if (error?.status === 429) fail(429, 'AI_DAILY', '今天的免费额度用完了，明天再来；也可以在模型里填自己的 API 继续用。'); throw error; }
+    await measure('quota', async () => {
+      await repo.throttle('ai-minute', session.user.id, 12);
+      // The free quota is shared by everyone; each person has a fair part of it a day.
+      try { await repo.throttle('ai-day', session.user.id, DAILY, 86400); }
+      catch (error) { if (error?.status === 429) fail(429, 'AI_DAILY', '今天的免费额度用完了，明天再来；也可以在模型里填自己的 API 继续用。'); throw error; }
+    });
     const asked = context.request.signal ? [context.request.signal] : [];
     let limited = 0;
     for (const member of POOL) {
       const begun = new AbortController(), wait = setTimeout(() => begun.abort(), BEGIN);
       try {
-        const upstream = await fetcher(member.url, { method: 'POST',
+        const upstream = await measure('inference', () => fetcher(member.url, { method: 'POST',
           headers: { Authorization: `Bearer ${env[member.key]}`, 'Content-Type': 'application/json' },
           signal: AbortSignal.any([begun.signal, AbortSignal.timeout(FINISH), ...asked]),
-          body: JSON.stringify(completionRequest(member.model, messages, situation, now(), body.last === true, { tools: available, preferred: body.preferredTools, reach: body.reach })) });
+          body: JSON.stringify(completionRequest(member.model, messages, situation, now(), body.last === true, { tools: available, preferred: body.preferredTools, reach: body.reach })) }));
         if (upstream.ok && upstream.body) return response.stream(relay(upstream.body, body.last ? [] : available.map(tool => tool.function.name)));
         if (upstream.status === 429) limited++;
       } catch { if (context.request.signal?.aborted) throw new Error('asked no more'); }

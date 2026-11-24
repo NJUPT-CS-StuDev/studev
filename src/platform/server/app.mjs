@@ -39,8 +39,10 @@ export function createPlatformHandler({ getStore = metadataStore, getGateway = o
       if (hasAuthorization(request)) await measure('auth', () => identity.authenticate(request, { required: true, allowEnrollment: true }));
       const identityResponse = await measure('identity', () => identity.handle(context, path));
       if (identityResponse) return timed(identityResponse);
-      const aiResponse = await createAiService({ identity, repo, env, now })(context, path);
-      if (aiResponse) return timed(aiResponse);
+      if (path === '/api/platform/ai') {
+        timings.delete('identity');
+        return timed(await createAiService({ identity, repo, env, now, measure })(context, path));
+      }
       const syncResponse = await createSyncService({ identity, repo })(context, path);
       if (syncResponse) return timed(syncResponse);
       timings.delete('identity');

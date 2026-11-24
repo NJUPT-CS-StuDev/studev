@@ -592,13 +592,56 @@ test('a stable attempt resends the same reservation while cancelled or expired u
   assert.equal((await f.complete(second.data)).status, 410);
   const third = await f.submit(item, 'bob', { ...body, attemptId: randomUUID() });
   assert.equal(third.status, 201);
-  assert.equal(f.gateway.objects.has(secondObject.objectKey), false);
+  assert.equal(f.gateway.objects.has(secondObject.objectKey), true);
   f.gateway.upload(f.gateway.uploads.at(-1), 'new');
   assert.equal((await f.complete(third.data)).status, 200);
+  assert.equal(f.gateway.objects.has(secondObject.objectKey), false);
   assert.equal((await f.cancel(third.data)).data.error, 'SUBMISSION_COMMITTED');
   assert.equal((await f.complete(third.data)).status, 200);
   const count = (await f.call(f.roundPath(item) + '/submissions', { user: 'owner' })).data.progress;
   assert.equal(count.records, 1);
+});
+
+test('attachment confirmation overlaps independent copies and removes them if another attachment fails validation', { timeout: 5_000 }, async () => {
+  const f = await collectionsFixture();
+  const item = await f.create({ round: { fields: [note, { ...attachment, maxFiles: 2 }] } });
+  const staged = await f.submit(item, 'alice', {
+    answers: { note: '内容' },
+    files: ['甲.txt', '乙.txt'].map(name => ({ fieldId: 'upload', name, type: 'text/plain', size: 3 })),
+  });
+  const [first, absent] = f.gateway.uploads;
+  f.gateway.upload(first, 'one');
+  let startCopy, releaseCopy, verifyMissing, releaseMissing;
+  const copying = new Promise(resolve => { startCopy = resolve; });
+  const readyToCopy = new Promise(resolve => { releaseCopy = resolve; });
+  const missingChecked = new Promise(resolve => { verifyMissing = resolve; });
+  const readyToCheckMissing = new Promise(resolve => { releaseMissing = resolve; });
+  const { head, copy } = f.gateway;
+  f.gateway.head = async key => {
+    if (key !== absent.objectKey) return head(key);
+    await readyToCheckMissing;
+    const result = await head(key);
+    verifyMissing();
+    return result;
+  };
+  f.gateway.copy = async (...args) => {
+    startCopy();
+    await readyToCopy;
+    return copy(...args);
+  };
+  const confirming = f.complete(staged.data);
+  try {
+    await copying;
+    releaseMissing();
+    await missingChecked;
+  } finally {
+    releaseMissing();
+    releaseCopy();
+  }
+  assert.equal((await confirming).data.error, 'UPLOAD_MISMATCH');
+  assert.equal(await f.repo.get(collectionKeys.locator(staged.data.submission.id)), null);
+  assert.equal(f.gateway.objects.size, 1);
+  assert.equal(f.gateway.objects.has(first.objectKey), true);
 });
 
 test('a cancelled confirmation cannot settle after its files have been copied', async () => {
@@ -692,7 +735,10 @@ test('replacement preserves retained files, retries cleanup and leaves imported 
   assert.equal(f.gateway.objects.has(replaced.objectKey), true);
   assert.equal(f.gateway.objects.has(kept.objectKey), true);
   f.gateway.delete = remove;
-  assert.equal((await f.submit(item, 'bob', { answers: { note: '另一份答卷' }, files: [file('upload', '另交.txt')] })).status, 201);
+  const third = await f.submit(item, 'bob', { answers: { note: '另一份答卷' }, files: [file('upload', '另交.txt')] });
+  assert.equal(third.status, 201);
+  assert.equal(f.gateway.objects.has(replaced.objectKey), true);
+  assert.deepEqual((await f.cancel(third.data)).data, { cancelled: true });
   assert.equal(f.gateway.objects.has(replaced.objectKey), false);
   assert.equal(f.gateway.objects.has(kept.objectKey), true);
   assert.equal(f.gateway.objects.has(legacyPath), true);

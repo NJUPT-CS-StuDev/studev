@@ -292,9 +292,13 @@ catch {
     else localStorage.removeItem('studev_session_generation');
 }
 return data as T; }
+let requestProof: { generation: string; until: number } | undefined;
 function rememberSession(value: Session | null) {
     currentSession = value;
+    requestProof = undefined;
     try {
+        const generation = localStorage.getItem('studev_session_generation');
+        if (value && generation) requestProof = { generation, until: performance.now() + 8_000 };
         if (value?.user) localStorage.setItem('studev_auth_user', JSON.stringify({
             id: value.user.id, nickname: value.user.nickname, role: value.user.role || 'user',
             qq: value.user.qq, verifiedAt: Date.now(),
@@ -343,6 +347,15 @@ export function acceptSession(value: Session | null, required = false): Session 
 export async function session(required = false, staff = false): Promise<Session | null> {
     await loadSession();
     return sessionForPage(required, staff);
+}
+/** Reuse the page's recent CSRF proof. The requested operation still authenticates on the server. */
+export async function requestSession(): Promise<Session | null> {
+    if (requestProof && performance.now() < requestProof.until &&
+        localStorage.getItem('studev_session_generation') === requestProof.generation &&
+        !localStorage.getItem('studev_session_refresh_pending') && !localStorage.getItem(foregroundRenewal)) {
+        return sessionForPage(false, false);
+    }
+    return session();
 }
 export function safeNext(raw: string | null): string { if (!raw || !raw.startsWith('/') || raw.startsWith('//') || /[\\\x00-\x20]/.test(raw))
     return '/forms/'; try {

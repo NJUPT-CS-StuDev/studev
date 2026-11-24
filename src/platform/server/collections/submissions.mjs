@@ -133,7 +133,7 @@ export function collectionSubmissions({ repo, env, now, getGateway, measure = (_
       ...await storage.presignUpload({
         id: file.id, objectKey: file.objectKey, contentType: file.type, fileSize: file.size, fileName: file.name,
       }, Math.min(seconds, uploadSeconds)),
-    })), queueCleanup(receiptId, receipt), cleanupLater(context, item.id, round.id, undefined, receiptId)]);
+    })), measure('cleanup-record', () => queueCleanup(receiptId, receipt))]);
     const submission = { ...record, revision: expectedRevision, files: [...record.files, ...pending] };
     return { submission: submissionView(submission, item, round), receiptId, receiptToken: receiptTokenFor(receiptId), uploads };
   }
@@ -257,7 +257,7 @@ export function collectionSubmissions({ repo, env, now, getGateway, measure = (_
       };
       await mapConcurrent(paths, 8, async (key) => {
         const task = await repo.get(key);
-        if (!task || (task.cleaned && now() < task.expiresAt + 1000)) return;
+        if (!task || task.id === exclude || (task.cleaned && now() < task.expiresAt + 1000)) return;
         signal.throwIfAborted();
         const winner = settled ? settled.winner : await repo.get(task.target);
         if (!winner && active[task.id]) return;
@@ -283,7 +283,8 @@ export function collectionSubmissions({ repo, env, now, getGateway, measure = (_
     const budget = new Promise((resolve) => {
       timer = setTimeout(() => { controller.abort(); resolve(); }, background ? 8000 : 1200);
     });
-    const job = measure('cleanup', () => Promise.race([run(), budget])).catch(() => {}).finally(() => clearTimeout(timer));
+    const job = measure(settled ? 'cleanup-current' : 'cleanup-previous', () => Promise.race([run(), budget]))
+      .catch(() => {}).finally(() => clearTimeout(timer));
     if (background) context.waitUntil(job);
     else await job;
   }
@@ -292,11 +293,17 @@ export function collectionSubmissions({ repo, env, now, getGateway, measure = (_
     const { record, pending, objectPrefix, expectedRevision } = receipt;
     const target = submissionKey(receipt);
     const quota = roundQuota(repo, record.itemId, record.roundId, now);
+    let sweep;
+    function sweepOlderUploads() {
+      if (enforceRate) sweep ??= cleanupLater(context, record.itemId, record.roundId, undefined, id);
+      return sweep;
+    }
     async function finish(value, snapshot) {
       await Promise.all([
         measure('quota', () => quota.saved(id, snapshot)).catch(() => {}),
         pending.length || receipt.discarded?.length
           ? cleanupLater(context, record.itemId, record.roundId, { id, winner: value }) : null,
+        sweepOlderUploads(),
       ]);
       return value;
     }
@@ -314,6 +321,9 @@ export function collectionSubmissions({ repo, env, now, getGateway, measure = (_
       fail(410, 'SUBMISSION_EXPIRED', '本次提交已取消或过期。');
     }
     if (enforceRate) await measure('rate', () => repo.throttle('collection-complete', record.userId, 60));
+    // Recover earlier uploads alongside this confirmation's object checks.
+    // Its own staging objects stay outside the sweep until settlement.
+    sweepOlderUploads();
     // An upload token was issued only after its durable cleanup task existed.
     // A direct text save can still be replacing files from an earlier receipt.
     if (!pending.length) await queueCleanup(id, receipt);
@@ -321,26 +331,28 @@ export function collectionSubmissions({ repo, env, now, getGateway, measure = (_
     const candidates = [];
     let disposable = true;
     try {
-      const staged = await mapConcurrent(pending, 5, async ({ extension, ...file }) => {
+      const publishIndex = () => measure('publish-index', () => locateSubmission(repo, record)).catch(error => ({ error }));
+      let index = pending.length ? undefined : publishIndex();
+      let checked = 0;
+      const copies = await mapConcurrent(pending, 5, async ({ extension, ...file }) => {
         const head = await measure('staging-head', () => storage.head(file.objectKey));
         if (!matchingObject(head, file)) fail(409, 'UPLOAD_MISMATCH', '附件尚未就绪，或内容与声明不一致。');
-        return { file, etag: head.etag };
+        if (++checked === pending.length) index = publishIndex();
+        const final = objectPrefix + 'final/' + id + '/' + file.id + '/' + randomUUID();
+        candidates.push(final);
+        await measure('copy', () => storage.copy(file.objectKey, final, head.etag));
+        const archived = await measure('final-head', () => storage.head(final));
+        if (!matchingObject(archived, file) || archived.etag !== head.etag) fail(409, 'UPLOAD_CHANGED', '附件在确认期间发生变化。');
+        return { ...file, objectKey: final, etag: head.etag };
+      }).finally(async () => {
+        // Started copies and the index write must settle before candidates can
+        // be removed or the authoritative submission revision is published.
+        await index;
       });
-      const [archivedFiles, index] = await Promise.allSettled([
-        mapConcurrent(staged, 5, async ({ file, etag }) => {
-          const final = objectPrefix + 'final/' + id + '/' + file.id + '/' + randomUUID();
-          candidates.push(final);
-          await measure('copy', () => storage.copy(file.objectKey, final, etag));
-          const archived = await measure('final-head', () => storage.head(final));
-          if (!matchingObject(archived, file) || archived.etag !== etag) fail(409, 'UPLOAD_CHANGED', '附件在确认期间发生变化。');
-          return { ...file, objectKey: final, etag };
-        }),
-        measure('publish-index', () => locateSubmission(repo, record)),
-      ]);
-      if (archivedFiles.status === 'rejected') throw archivedFiles.reason;
-      if (index.status === 'rejected') throw index.reason;
+      const failedIndex = await index;
+      if (failedIndex) throw failedIndex.error;
       const saving = await measure('reserve', () => quota.authoriseSave(id, quotaState));
-      const value = { ...record, receiptId: id, files: [...record.files, ...archivedFiles.value], late: submissionWasLate(record),
+      const value = { ...record, receiptId: id, files: [...record.files, ...copies], late: submissionWasLate(record),
         status: submissionStatus(record), updatedAt: iso(),
       };
       // A transport error can conceal a successful commit. Retain the candidate
@@ -367,6 +379,7 @@ export function collectionSubmissions({ repo, env, now, getGateway, measure = (_
         const failed = candidates.filter((_, index) => attempts[index].status === 'rejected');
         if (failed.length) await queueCandidates(id, receipt, failed).catch(() => {});
       }
+      await sweep;
     }
   }
 
@@ -389,7 +402,10 @@ export function collectionSubmissions({ repo, env, now, getGateway, measure = (_
       current = await repo.get(target);
       if (current?.receiptId === id) fail(409, 'SUBMISSION_COMMITTED', '这次提交已经保存。');
     }
-    await cleanupLater(context, itemId, roundId, { id, winner: current });
+    await Promise.all([
+      cleanupLater(context, itemId, roundId, { id, winner: current }),
+      cleanupLater(context, itemId, roundId, undefined, id),
+    ]);
     return { cancelled: true };
   }
 
@@ -427,5 +443,5 @@ export function collectionSubmissions({ repo, env, now, getGateway, measure = (_
     // latency while still leaving a race between a HEAD and the actual GET.
     return getGateway(config).presignDownload({ fileName: file.name, finalObjectKey: file.objectKey }, file.etag, expiresIn);
   }
-  return { begin, complete, cancel, change, download, cleanup: cleanupLater };
+  return { begin, complete, cancel, change, download };
 }
