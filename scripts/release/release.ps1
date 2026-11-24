@@ -147,10 +147,10 @@ $fullPortable = Join-Path $tempRoot "studev-$versionName-windows.zip"
 Copy-Item $portable $fullPortable
 $fullUpdate = Join-Path $velopack "top.hicancan.studev-$versionName-full.nupkg"
 if (-not (Test-Path -LiteralPath $fullUpdate)) { throw 'Windows full update package is missing' }
-$env:OSCA_DOWNLOAD_ENDPOINT = "https://$(Get-Secret local.cloudflare.account_id).r2.cloudflarestorage.com"
-$env:OSCA_DOWNLOAD_BUCKET = 'studev-download'
-$env:OSCA_DOWNLOAD_ACCESS_KEY = Get-Secret local.cloudflare.r2_access_key
-$env:OSCA_DOWNLOAD_SECRET_KEY = Get-Secret local.cloudflare.r2_secret_key
+$env:R2_DOWNLOAD_ENDPOINT = "https://$(Get-Secret local.cloudflare.account_id).r2.cloudflarestorage.com"
+$env:R2_DOWNLOAD_BUCKET = 'studev-download'
+$env:R2_DOWNLOAD_ACCESS_KEY = Get-Secret local.cloudflare.r2_access_key
+$env:R2_DOWNLOAD_SECRET_KEY = Get-Secret local.cloudflare.r2_secret_key
 $uploads = @($fullApk, "studev-$versionName.apk", $fullPortable, "windows/studev-$versionName-windows.zip",
     $fullUpdate, "windows/$([IO.Path]::GetFileName($fullUpdate))")
 & node (Join-Path $repo 'scripts/release/put.mjs') @uploads

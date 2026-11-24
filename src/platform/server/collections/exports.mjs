@@ -69,7 +69,7 @@ export function signAttachments(item, round, records, selection, download) {
     const current = bySubmission.get(submissionId);
     const file = current?.record.revision === revision && current.files.get(id);
     if (!file) fail(409, 'EXPORT_CHANGED', '提交记录或附件已有变动，请重新查看打包预览。');
-    return { id, submissionId, revision, file, archiveName: archiveAttachmentName(item, round, current.record, file) };
+    return { id, submissionId, revision, record: current.record, file, archiveName: archiveAttachmentName(item, round, current.record, file) };
   });
-  return mapConcurrent(picked, 16, async ({ file, ...ref }) => ({ ...ref, download: await download(file, 600) }));
+  return mapConcurrent(picked, 16, async ({ record, file, ...ref }) => ({ ...ref, download: await download(record, file, 600) }));
 }

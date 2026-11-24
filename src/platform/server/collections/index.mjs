@@ -213,7 +213,7 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
       return response({ submission: submissionView(record, item, round), canEdit: canEditSubmission(record, item, round, viewer.user, now()) });
     }
     if (request.method !== 'POST') fail(405, 'METHOD_NOT_ALLOWED', '不支持此操作。');
-    if (download) return response({ download: await submissions.download(record.files.find((file) => file.id === fileId)) });
+    if (download) return response({ download: await submissions.download(record, record.files.find((file) => file.id === fileId)) });
     if (action === 'review' && !manage) fail(403, 'STAFF_REQUIRED', '没有审核此提交的权限。');
     if (action === 'edit' && !own) fail(404, 'NOT_FOUND', '提交记录不存在或无权修改。');
     if (action) return response({ submission: await submissions.change(request, record, item, round, viewer.user, action, receivedAt) });

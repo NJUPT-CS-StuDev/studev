@@ -27,6 +27,16 @@ function matchingObject(head, file) {
   return head && head.size === file.size && head.contentType === file.type && strongETag(head.etag);
 }
 
+function roundObjectPrefix({ prefix }, { itemId, roundId }) {
+  return `${prefix}collection/${itemId}/${roundId}/`;
+}
+
+function ownsFinalObject(file, prefix) {
+  if (!file.objectKey?.startsWith(prefix)) return false;
+  const parts = file.objectKey.slice(prefix.length).split('/');
+  return parts.length === 3 && parts[1] === file.id && parts.every((part) => submissionId.test(part));
+}
+
 export function ownsSubmission(record, user) {
   if (!user) return false;
   if (record.userId) return record.userId === user.id;
@@ -185,7 +195,7 @@ export function collectionSubmissions({ repo, env, now, getGateway, measure = (_
       allowEdit: round.allowEdit, requireReview: round.requireReview, deadline: round.deadline,
       late: deadlineReached(round.deadline, receivedAt),
     };
-    const objectPrefix = configuration ? configuration.prefix + 'collection/' + item.id + '/' + round.id + '/' : '';
+    const objectPrefix = configuration ? roundObjectPrefix(configuration, { itemId: item.id, roundId: round.id }) : '';
     const pending = inputs.map((file) => ({ ...file, objectKey: objectPrefix + 'staging/' + receiptId + '/' + file.id + '.' + file.extension }));
     const receipt = {
       expiresAt: inputs.length ? entry.expiresAt - confirmationMillis : entry.expiresAt,
@@ -250,13 +260,8 @@ export function collectionSubmissions({ repo, env, now, getGateway, measure = (_
       signal.throwIfAborted();
       const configuration = oscaConfig(env);
       const storage = getGateway(configuration);
-      const objectPrefix = configuration.prefix + 'collection/' + itemId + '/' + roundId + '/';
+      const objectPrefix = roundObjectPrefix(configuration, { itemId, roundId });
       const finalPrefix = objectPrefix + 'final/';
-      const ownedFinal = ({ id, objectKey }) => {
-        if (!objectKey?.startsWith(finalPrefix)) return false;
-        const parts = objectKey.slice(finalPrefix.length).split('/');
-        return parts.length === 3 && parts[1] === id && parts.every((part) => submissionId.test(part));
-      };
       await mapConcurrent(paths, 8, async (key) => {
         const task = await repo.get(key);
         if (!task || task.id === exclude || (task.cleaned && now() < task.expiresAt + 1000)) return;
@@ -264,7 +269,7 @@ export function collectionSubmissions({ repo, env, now, getGateway, measure = (_
         const winner = settled ? settled.winner : await repo.get(task.target);
         if (!winner && active[task.id]) return;
         const discarded = !task.cleaned && winner?.receiptId === task.id
-          ? task.discarded.filter(ownedFinal).map((file) => file.objectKey) : [];
+          ? task.discarded.filter((file) => ownsFinalObject(file, finalPrefix)).map((file) => file.objectKey) : [];
         const stagePrefix = objectPrefix + 'staging/' + task.id + '/';
         const staging = task.staging.filter((objectKey) => objectKey.startsWith(stagePrefix));
         const candidates = (task.candidates || []).filter((objectKey) =>
@@ -437,10 +442,12 @@ export function collectionSubmissions({ repo, env, now, getGateway, measure = (_
     return submissionView(result, item, round);
   }
 
-  async function download(file, expiresIn = 60) {
+  async function download(record, file, expiresIn = 60) {
     if (!file) fail(404, 'NOT_FOUND', '附件不存在。');
     const config = oscaConfig(env);
-    if (!file.objectKey?.startsWith(config.prefix) || !strongETag(file.etag)) fail(409, 'OBJECT_CHANGED', '附件归档信息无效。');
+    if (!ownsFinalObject(file, roundObjectPrefix(config, record) + 'final/') || !strongETag(file.etag)) {
+      fail(409, 'OBJECT_CHANGED', '附件归档信息无效。');
+    }
     // The signed GET carries If-Match. A storage round trip here would add
     // latency while still leaving a race between a HEAD and the actual GET.
     return getGateway(config).presignDownload({ fileName: file.name, finalObjectKey: file.objectKey }, file.etag, expiresIn);

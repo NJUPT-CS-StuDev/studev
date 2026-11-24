@@ -766,7 +766,7 @@ test('slow storage cleanup cannot fail an already confirmed upload', async () =>
   assert.equal(f.gateway.objects.has(upload.objectKey), false);
 });
 
-test('replacement preserves retained files, retries cleanup and leaves imported paths intact', async () => {
+test('replacement preserves retained files, retries cleanup and rejects noncanonical attachment paths', async () => {
   const f = await collectionsFixture();
   const item = await f.create({ round: { fields: [note, attachment,
     { ...attachment, id: 'keep', label: '保留', required: false }, { ...attachment, id: 'legacy', label: '历史', required: false }] } });
@@ -783,6 +783,8 @@ test('replacement preserves retained files, retries cleanup and leaves imported 
   f.gateway.objects.set(legacyPath, { size: 3 });
   const legacy = { ...replaced, id: randomUUID(), fieldId: 'legacy', objectKey: legacyPath };
   await f.repo.append(prefix, { ...current, files: [...current.files, legacy] }, current.revision);
+  const download = await f.call(`/submissions/${current.id}/files/${legacy.id}/download`, { user: 'alice', body: {} });
+  assert.equal(download.status, 409);
   const second = await f.submit(item, 'alice', { answers: { note: '新答卷' }, keepFiles: [kept.id], files: [file('upload', '新.txt')] });
   f.gateway.upload(f.gateway.uploads.at(-1), 'new');
   const remove = f.gateway.delete;

@@ -12,8 +12,8 @@ const clock = () => { const stamp = new Date().toISOString().replace(/[-:]|\.\d+
 
 /** The bucket named by a process's environment, or null where it is not configured. */
 export function downloadStore(env = process.env) {
-    if (!env.OSCA_DOWNLOAD_ENDPOINT || !env.OSCA_DOWNLOAD_BUCKET || !env.OSCA_DOWNLOAD_ACCESS_KEY || !env.OSCA_DOWNLOAD_SECRET_KEY) return null;
-    return { endpoint: env.OSCA_DOWNLOAD_ENDPOINT, bucket: env.OSCA_DOWNLOAD_BUCKET, accessKey: env.OSCA_DOWNLOAD_ACCESS_KEY, secretKey: env.OSCA_DOWNLOAD_SECRET_KEY };
+    if (!env.R2_DOWNLOAD_ENDPOINT || !env.R2_DOWNLOAD_BUCKET || !env.R2_DOWNLOAD_ACCESS_KEY || !env.R2_DOWNLOAD_SECRET_KEY) return null;
+    return { endpoint: env.R2_DOWNLOAD_ENDPOINT, bucket: env.R2_DOWNLOAD_BUCKET, accessKey: env.R2_DOWNLOAD_ACCESS_KEY, secretKey: env.R2_DOWNLOAD_SECRET_KEY };
 }
 
 export async function signedFetch(store, method, key, { body = '', headers = {}, query = '', signal } = {}) {
