@@ -208,7 +208,7 @@ function RoundBoard({ detail, round, version, authorize, refresh }: {
                     : <p className="cw-muted" role="status">正在加载提交内容…</p>}
             </div></Dialog>}
             {exporting && <ExportDialog path={path} title={detail.item.name} round={round} rows={rows} activeGroupId={scopeGroupId}
-                activeFilter={filter} selected={selected} onClose={() => setExporting(false)} />}
+                activeFilter={filter} selected={selected} attachmentNamePattern={detail.item.attachmentNamePattern} onClose={() => setExporting(false)} />}
         </div>
     </section>;
 }
@@ -354,10 +354,11 @@ export function Details({ detail, round, now, receiptId, version, navigate, edit
                     {showComposer && <>
                         <h2>{prior ? '更新提交' : '填写内容'}</h2>
                         <AnswerForm key={`${round.id}/${prior?.id || ''}`} round={round} path={roundRoute(item.id, round.id)} replacing={prior} canSubmit={canSubmit && !limitReached}
-                            focus={writing} makeup={state === 'makeup'} loginUrl={loginUrl} authorize={authorize} onDismiss={writing ? () => setEditingRound('') : undefined} onSaved={submission => {
+                            focus={writing} makeup={state === 'makeup'} loginUrl={loginUrl} archiveNaming={item.hasAttachmentNamePattern} authorize={authorize} onDismiss={writing ? () => setEditingRound('') : undefined} onSaved={submission => {
                                 setSaved(previous => ({ ...previous, [submission.id]: submission }));
                                 setSavedNotice({ roundId: round.id, message: prior ? '已更新提交。' : submission.late ? '补交成功。' : '提交成功。' });
                                 setEditingRound('');
+                                if (item.hasAttachmentNamePattern || submission.files.some(file => file.archiveName)) onChanged();
                             }} />
                     </>}
                     {submitNote && <p className="cw-muted">{submitNote}</p>}

@@ -108,10 +108,10 @@ export function itemView(item, viewer, organizations, ownRecords, now, detail = 
   return {
     id, name, description, tags, term, course, issuer: safeIssuer,
     visibility, status, targetMode, publishedAt, updatedAt, revision, recipientCount: recipients.length,
-    ...(manage && detail ? { recipients, showProgress: item.showProgress === true,
+    ...(manage && detail ? { recipients, showProgress: item.showProgress === true, attachmentNamePattern: item.attachmentNamePattern || '',
       audienceOrganizationId: targetMode === 'selected' ? item.audienceOrganizationId || issuer.organizationId : null } : {}),
     canManage: manage, inRecipients: isRecipient(item, actor),
-    ...(detail ? { canViewProgress: manage || canSeeProgress(item, viewer) } : {}),
+    ...(detail ? { canViewProgress: manage || canSeeProgress(item, viewer), hasAttachmentNamePattern: Boolean(item.attachmentNamePattern) } : {}),
     rounds: rounds.map((round) => ({
       ...(detail ? round : {}),
       ...roundSummary(item, round, actor, ownByRound, now, detail),

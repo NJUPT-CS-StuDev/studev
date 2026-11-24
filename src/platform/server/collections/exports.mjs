@@ -1,3 +1,4 @@
+import { archiveAttachmentName } from '../../collections.mjs';
 import { fail } from '../common.mjs';
 import { mapConcurrent } from './records.mjs';
 import { submissionWasLate } from './submissions.mjs';
@@ -46,7 +47,7 @@ export function collectionCsv(item, round, records) {
   });
 }
 
-export function fileManifest(records, answerFields) {
+export function fileManifest(item, round, records, answerFields) {
   return records.flatMap(record => {
     if (!record.files.length) return [];
     const labels = new Map(record.fields.map(({ id, label }) => [id, label]));
@@ -54,20 +55,21 @@ export function fileManifest(records, answerFields) {
       ? Object.fromEntries(Object.entries(record.answers).filter(([id]) => answerFields.has(id))) : undefined;
     return record.files.map(({ id, fieldId, name, size, type }) => ({
       id, fieldId, name, size, type, studentId: record.studentId, studentName: record.studentName, submissionId: record.id,
-      revision: record.revision, fieldLabel: labels.get(fieldId), ...(answers ? { answers } : {}),
+      revision: record.revision, fieldLabel: labels.get(fieldId), archiveName: archiveAttachmentName(item, round, record, { fieldId, name }),
+      ...(answers ? { answers } : {}),
     }));
   });
 }
 
-export function signAttachments(records, selection, download) {
+export function signAttachments(item, round, records, selection, download) {
   const bySubmission = new Map(records.map(record => [record.id, {
-    revision: record.revision, files: new Map(record.files.map(file => [file.id, file])),
+    record, files: new Map(record.files.map(file => [file.id, file])),
   }]));
   const picked = selection.map(({ id, submissionId, revision }) => {
     const current = bySubmission.get(submissionId);
-    const file = current?.revision === revision && current.files.get(id);
+    const file = current?.record.revision === revision && current.files.get(id);
     if (!file) fail(409, 'EXPORT_CHANGED', '提交记录或附件已有变动，请重新查看打包预览。');
-    return { id, submissionId, revision, file };
+    return { id, submissionId, revision, file, archiveName: archiveAttachmentName(item, round, current.record, file) };
   });
   return mapConcurrent(picked, 16, async ({ file, ...ref }) => ({ ...ref, download: await download(file, 600) }));
 }

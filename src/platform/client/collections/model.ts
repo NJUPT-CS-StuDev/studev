@@ -74,6 +74,8 @@ export interface Item<CurrentRound extends RoundSummary = RoundSummary> {
     targetMode: TargetMode;
     audienceOrganizationId?: string | null;
     showProgress?: boolean;
+    attachmentNamePattern?: string;
+    hasAttachmentNamePattern?: boolean;
     canViewProgress?: boolean;
     publishedAt: string;
     updatedAt: string;
@@ -164,7 +166,7 @@ export function matchesBoardFilter(row: { status: string; submissionId?: string;
     return row.status === filter;
 }
 
-export interface SubmissionFile { id: string; fieldId: string; name: string; size: number; type: string }
+export interface SubmissionFile { id: string; fieldId: string; name: string; size: number; type: string; archiveName?: string }
 export interface Submission {
     id: string;
     itemId: string;

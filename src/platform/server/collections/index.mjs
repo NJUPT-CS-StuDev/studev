@@ -92,7 +92,8 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
     return response({ deleted: true });
   }
 
-  async function exportFiles(request, actor, itemId, roundId) {
+  async function exportFiles(request, actor, item, round) {
+    const itemId = item.id, roundId = round.id;
     const { submissionIds, answerFieldIds = [], attachments } = await readJson(request, 2 * 1024 * 1024);
     const signing = attachments !== undefined;
     if (signing && (submissionIds !== undefined || !Array.isArray(attachments) || attachments.length > 10000 ||
@@ -118,8 +119,8 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
       if (signing) fail(409, 'EXPORT_CHANGED', '提交记录或附件已有变动，请重新查看打包预览。');
       fail(404, 'EXPORT_SUBMISSION_NOT_FOUND', '有选中的提交记录不在本轮次。');
     }
-    if (!signing) return response({ files: fileManifest(records, new Set(answerFieldIds)) });
-    const files = await signAttachments(records, attachments, submissions.download);
+    if (!signing) return response({ attachmentNamePattern: item.attachmentNamePattern || '', files: fileManifest(item, round, records, new Set(answerFieldIds)) });
+    const files = await signAttachments(item, round, records, attachments, submissions.download);
     if (files.length) await repo.audit(actor, 'collection.export', itemId, { roundId, kind: 'files', count: records.length });
     return response({ files });
   }
@@ -152,7 +153,7 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
       const body = await readJson(request);
       return deleteDraft(item, body.revision, viewer.user);
     }
-    if (action === 'files' && request.method === 'POST') return exportFiles(request, viewer.user, id, roundId);
+    if (action === 'files' && request.method === 'POST') return exportFiles(request, viewer.user, item, round);
     if (action === 'csv' && request.method === 'GET') {
       const records = await roundRecords(repo, id, roundId);
       await repo.audit(viewer.user, 'collection.export', id, { roundId, kind: action, count: records.length });

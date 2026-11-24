@@ -161,6 +161,8 @@
 .cw-files { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
 .cw-file { justify-content: start; max-width: 100%; white-space: normal; text-align: start; color: var(--brand); overflow-wrap: anywhere; }
 .cw-file small { color: var(--muted); flex: none; }
+.cw-archive-name { margin: 4px 0 0; font-size: 13px; }
+.cw-archive-name span { color: var(--ink); }
 .cw-mine h1 { margin: 5px 0 20px; }
 
 .cw-dialog { max-height: calc(100dvh - 36px); width: min(580px, calc(100% - 28px)); margin: auto; padding: 0; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); color: var(--ink); }
@@ -174,6 +176,8 @@
 .cw-access-settings { gap: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; }
 .cw-access-settings label, .cw-access-settings select { min-width: 0; }
 .cw-access-settings > .cw-form-grid { align-items: start; }
+.cw-attachment-naming { display: grid; gap: 7px; }
+.cw-attachment-naming .cw-button { min-height: 32px; padding: 3px 9px; }
 .cw-access-fact strong, .cw-audience-choice legend { font-weight: 550; }
 .cw-access-fact span { overflow-wrap: anywhere; }
 .cw-audience-choice { border: 0; margin: 0; padding: 0; min-width: 0; }

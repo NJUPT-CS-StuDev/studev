@@ -1,5 +1,8 @@
 import { api, fetchStorageDownload, safeStorageUrl, saveBlob, type StorageDownload } from '../api';
+import { zipSegment } from '../../collections.mjs';
 import { submissionRoute } from './model';
+
+export { zipSegment } from '../../collections.mjs';
 
 /** Minimal zero-dependency ZIP builder (STORE mode) for client-side batch download from OSCA. */
 const crcTable = new Uint32Array(256);
@@ -74,6 +77,7 @@ export interface ExportAttachment {
     fieldId: string;
     fieldLabel?: string;
     name: string;
+    archiveName?: string;
     size: number;
     type: string;
     studentId?: string;
@@ -83,15 +87,9 @@ export interface ExportAttachment {
 }
 
 export type ZipEntry<File extends ExportAttachment = ExportAttachment> = { path: string; file: File } | { path: string; text: string };
-export type SignedAttachment = Pick<ExportAttachment, 'id' | 'submissionId' | 'revision'> & { download: StorageDownload };
+export type SignedAttachment = Pick<ExportAttachment, 'id' | 'submissionId' | 'revision' | 'archiveName'> & { download: StorageDownload };
 export const exportAttachmentKey = (file: Pick<ExportAttachment, 'id' | 'submissionId' | 'revision'>) =>
     `${file.submissionId}/${file.revision}/${file.id}`;
-
-export function zipSegment(value: string) {
-    const name = [...value.normalize('NFC').replace(/[<>:"/\\|?*\u0000-\u001f]/gu, '_')
-        .replace(/^[. ]+|[. ]+$/g, '')].slice(0, 75).join('').replace(/[. ]+$/g, '') || '未填写';
-    return /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(name) ? '_' + name : name;
-}
 
 export async function downloadZip(entries: ZipEntry<ExportAttachment & SignedAttachment>[], name: string, progress: (message: string) => void, signal: AbortSignal) {
     if (!entries.length) throw new Error('当前范围没有可打包的内容。');

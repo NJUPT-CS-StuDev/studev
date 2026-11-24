@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { fail, text } from '../common.mjs';
 import { activeMemberships, flattenOrganizationTree, isWithin, organization, organizationName, organizationPath, positionLabel } from '../../organizations.mjs';
-import { deadlineReached, isSemester, pinnedCollections } from '../../collections.mjs';
+import { deadlineReached, isSemester, pinnedCollections, validAttachmentNamePattern } from '../../collections.mjs';
 import { boolean, fields, integer, validObject } from './fields.mjs';
 import { collectionId, studentId } from './records.mjs';
 
@@ -165,6 +165,8 @@ export async function itemInput(body, now, existing, viewer, orgs, issuer, loadU
   const status = choice(body.status ?? existing?.status ?? 'draft', ['draft', 'published', 'closed'], '收集状态');
   const visibility = choice(body.visibility ?? existing?.visibility ?? 'members', ['public', 'members'], '可见范围');
   const showProgress = boolean(body.showProgress, existing?.showProgress === true);
+  const attachmentNamePattern = text(body.attachmentNamePattern === undefined ? existing?.attachmentNamePattern : body.attachmentNamePattern, '附件汇总命名', 320);
+  if (!validAttachmentNamePattern(attachmentNamePattern)) fail(400, 'INVALID_ATTACHMENT_NAME_PATTERN', '附件汇总命名只能使用提供的字段和文件名允许的字符。');
   const term = body.term ?? existing?.term;
   if (!isSemester(term)) fail(400, 'INVALID_SEMESTER', '请选择收集所属的学期。');
   if (existing && existing.status !== 'draft' && status === 'draft') {
@@ -221,7 +223,7 @@ export async function itemInput(body, now, existing, viewer, orgs, issuer, loadU
     term,
     course: Object.hasOwn(body, 'course') && (body.course?.id !== null || body.course?.code !== existing?.course?.code || body.course?.name !== existing?.course?.name)
       ? courseReference(body.course) : existing?.course ?? null,
-    targetMode, status, visibility, rounds, audienceOrganizationId, showProgress,
+    targetMode, status, visibility, rounds, audienceOrganizationId, showProgress, attachmentNamePattern,
     recipients: roster,
     publishedAt: existing?.publishedAt || (status === 'published' ? now : ''),
     createdAt: existing?.createdAt || now,

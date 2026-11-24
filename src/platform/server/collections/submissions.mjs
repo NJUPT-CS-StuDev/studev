@@ -1,5 +1,5 @@
 import { createHash, createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
-import { deadlineReached, roundAcceptsSubmissions } from '../../collections.mjs';
+import { archiveAttachmentName, deadlineReached, roundAcceptsSubmissions } from '../../collections.mjs';
 import { fail, readJson, text } from '../common.mjs';
 import { isConflict } from '../store.mjs';
 import { isRecipient } from './definition.mjs';
@@ -38,7 +38,9 @@ export function submissionView(record, item, round) {
   const { id, itemId, roundId, studentId, studentName, answers, fields, submittedAt, createdAt, updatedAt, status, revision, review } = record;
   return { id, itemId, roundId, itemName: item?.name, roundLabel: round?.label, studentId, studentName,
     answers, fields, submittedAt, createdAt, updatedAt, status, late: submissionWasLate(record), revision, ...(review ? { review } : {}),
-    files: record.files.map(({ id, fieldId, name, size, type }) => ({ id, fieldId, name, size, type })),
+    files: record.files.map(({ id, fieldId, name, size, type }) => ({
+      id, fieldId, name, size, type, archiveName: archiveAttachmentName(item, round, record, { fieldId, name }),
+    })),
   };
 }
 

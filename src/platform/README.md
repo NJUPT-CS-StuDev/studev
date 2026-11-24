@@ -137,6 +137,11 @@ within each semester. Search matches tags and courses. The optional course
 reference copies the stable campus course ID, code and display name, and remains
 usable across search index updates.
 
+Managers may set `attachmentNamePattern` on the collection, shared by all rounds.
+The authenticated submission view and staff export return an `archiveName`
+generated from the same rule, with the original `name` retained for individual
+downloads. An empty rule leaves names to the manager's export settings.
+
 - Visitors browse published public collections. Submission requires a logged-in
   eligible account. Stopping a collection closes submissions and leaves its
   published detail visible to the same audience. Unpublishing returns the

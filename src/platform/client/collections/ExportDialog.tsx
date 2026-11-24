@@ -1,6 +1,6 @@
 import { ArrowDown, ArrowUp, Download, FileArchive, FileText, Folder, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { collectionProgress } from '../../collections.mjs';
+import { attachmentNameTokens, collectionProgress, formatAttachmentName, splitAttachmentName } from '../../collections.mjs';
 import { api, bytes, errorText } from '../api';
 import { Dialog } from './Dialog';
 import { downloadZip, exportAttachmentKey, zipSegment, type ExportAttachment, type SignedAttachment, type ZipEntry } from './attachments';
@@ -10,6 +10,7 @@ import './Export.css';
 interface ExportDialogProps {
     path: string;
     title: string;
+    attachmentNamePattern?: string;
     round: Round;
     rows: BoardTableRow[];
     activeGroupId: string | null;
@@ -20,7 +21,6 @@ interface ExportDialogProps {
 
 const folderNames = { group: '班级或组织', round: '批次', student: '学号和姓名' };
 type FolderLayer = keyof typeof folderNames;
-const builtinTokens = ['学号', '姓名', '班级', '批次', '收集名称', '附件项', '原文件名'] as const;
 const schemeKey = 'studev_collection_export_scheme';
 const tokens = /\{([^{}]+)\}/g;
 const fieldPrefix = '字段:';
@@ -46,9 +46,13 @@ const tokenValue = (value: unknown): string => {
     return typeof value === 'string' || typeof value === 'number' ? String(value) : '';
 };
 
-function splitName(name: string) {
-    const index = name.lastIndexOf('.');
-    return index > 0 && index < name.length - 1 ? { stem: name.slice(0, index), extension: name.slice(index + 1) } : { stem: name, extension: '' };
+function archiveNameParts(file: ExportAttachment, pattern: string, round: Round, values: Record<'学号' | '姓名' | '班级' | '收集名称', string>) {
+    if (file.archiveName) return splitAttachmentName(file.archiveName);
+    const builtins: Record<string, string> = {
+        ...values, 批次: round.label, 附件项: file.fieldLabel || round.fields.find(field => field.id === file.fieldId)?.label || '附件', 原文件名: splitAttachmentName(file.name).stem,
+    };
+    return splitAttachmentName(formatAttachmentName(pattern, file.name, token =>
+        token.startsWith(fieldPrefix) ? tokenValue(file.answers?.[token.slice(fieldPrefix.length)]) : builtins[token] ?? ''));
 }
 
 function summaryLine(counts: ProgressCounts) {
@@ -107,7 +111,6 @@ function makePlan({ files, attachmentRows, reportRows, scheme, title, round, rep
     for (const file of ordered) {
         const row = bySubmission.get(file.submissionId);
         if (!row) continue;
-        const { stem, extension } = splitName(file.name);
         const studentId = row.studentId || file.studentId || '';
         const name = row.name || file.studentName || '';
         const group = row.groupLabel || '待核对';
@@ -130,15 +133,8 @@ function makePlan({ files, attachmentRows, reportRows, scheme, title, round, rep
             segments[0] = folder;
         }
         const directory = segments.join('/');
-        const values: Record<string, string> = {
-            学号: studentId, 姓名: name, 班级: group, 批次: round.label, 收集名称: title,
-            附件项: file.fieldLabel || round.fields.find(field => field.id === file.fieldId)?.label || '附件', 原文件名: stem,
-        };
-        const result = scheme.pattern.replace(tokens, (_token, key: string) =>
-            key.startsWith(fieldPrefix) ? tokenValue(file.answers?.[key.slice(fieldPrefix.length)]) : values[key] ?? '');
-        const cleanStem = zipSegment(result.trim() || stem);
-        const ending = extension ? zipSegment('file.' + extension).slice(4) : '';
-        const full = (suffix = '') => (directory ? directory + '/' : '') + cleanStem + suffix + ending;
+        const { stem, extension } = archiveNameParts(file, scheme.pattern, round, { 学号: studentId, 姓名: name, 班级: group, 收集名称: title });
+        const full = (suffix = '') => (directory ? directory + '/' : '') + stem + suffix + (extension ? '.' + extension : '');
         let path = full();
         const base = path.toLowerCase();
         let key = base;
@@ -178,7 +174,8 @@ function ZipTree({ entries, name }: { entries: ZipEntry[]; name: string }) {
     return <div className="cw-export-tree"><div><FileArchive size={17} />{name}</div>{render(tree)}</div>;
 }
 
-export default function ExportDialog({ path, title, round, rows, activeGroupId, activeFilter, selected, onClose }: ExportDialogProps) {
+export default function ExportDialog({ path, title, attachmentNamePattern, round, rows, activeGroupId, activeFilter, selected, onClose }: ExportDialogProps) {
+    const collectionNaming = Boolean(attachmentNamePattern);
     const [scope, setScope] = useState<'current' | 'all'>('current');
     const [archiveName, setArchiveName] = useState(round.label);
     const [hasPreset, setHasPreset] = useState(() => !!readScheme());
@@ -211,30 +208,35 @@ export default function ExportDialog({ path, title, round, rows, activeGroupId, 
         fieldLabels.set(field.id, label);
         labelIds.set(label, field.id);
     }
-    const displayedPattern = scheme.pattern.replace(tokens, (whole, token: string) => {
+    const displayedPattern = attachmentNamePattern || scheme.pattern.replace(tokens, (whole, token: string) => {
         const label = token.startsWith(fieldPrefix) && fieldLabels.get(token.slice(fieldPrefix.length));
         return label ? '{' + label + '}' : whole;
     });
-    const fileTokens = [...scheme.pattern.matchAll(tokens)].map(match => match[1]!);
+    const fileTokens = collectionNaming ? [] : [...scheme.pattern.matchAll(tokens)].map(match => match[1]!);
     const answerFieldIds = [...new Set(fileTokens.filter(token => token.startsWith(fieldPrefix))
         .map(token => token.slice(fieldPrefix.length)).filter(id => formFields.some(field => field.id === id)))].sort();
     const submissionIds = [...new Set(attachmentRows.flatMap(row => row.submissionId && row.hasFiles ? [row.submissionId] : []))].sort();
-    const key = JSON.stringify({ submissionIds, answerFieldIds });
+    const key = JSON.stringify({ submissionIds, answerFieldIds, attachmentNamePattern: attachmentNamePattern || '' });
     const activeGroup = activeGroupId === null ? '全部组织' : rows.find(row => row.groupId === activeGroupId)?.groupLabel || '待核对';
     const activeStatus = submissionStatus[activeFilter as keyof typeof submissionStatus] || '全部状态';
     const reportLabel = scope === 'all' || activeGroupId === null ? '整个批次' : activeGroup;
-    const invalidToken = fileTokens.find(token => !builtinTokens.some(value => value === token) &&
+    const invalidToken = fileTokens.find(token => !attachmentNameTokens.some(value => value === token) &&
         !(token.startsWith(fieldPrefix) && answerFieldIds.includes(token.slice(fieldPrefix.length))));
-    const invalidPattern = !scheme.pattern.trim() || /[{}]/.test(scheme.pattern.replace(tokens, '')) || !!invalidToken;
+    const invalidPattern = !collectionNaming && (!scheme.pattern.trim() || /[{}]/.test(scheme.pattern.replace(tokens, '')) || !!invalidToken);
     useEffect(() => {
         const controller = new AbortController();
-        const args = JSON.parse(key) as { submissionIds: string[]; answerFieldIds: string[] };
-        if (!args.submissionIds.length) {
+        const { submissionIds, answerFieldIds, attachmentNamePattern } = JSON.parse(key) as { submissionIds: string[]; answerFieldIds: string[]; attachmentNamePattern: string };
+        if (!submissionIds.length) {
             setManifest({ key, files: [], time: new Date().toISOString() });
             return;
         }
-        api<{ files: ExportAttachment[] }>(path + '/files', args, { signal: controller.signal })
-            .then(({ files }) => { if (!controller.signal.aborted) setManifest({ key, files, time: new Date().toISOString() }); })
+        api<{ files: ExportAttachment[]; attachmentNamePattern?: string }>(path + '/files', { submissionIds, answerFieldIds }, { signal: controller.signal })
+            .then(({ files, attachmentNamePattern: currentPattern }) => {
+                if (controller.signal.aborted) return;
+                if ((currentPattern || '') !== attachmentNamePattern || files.some(file => Boolean(file.archiveName) !== Boolean(attachmentNamePattern))) {
+                    setManifest({ key, files: [], time: '', error: '收集的汇总命名规则已更新，请刷新页面后重新打包。' });
+                } else setManifest({ key, files, time: new Date().toISOString() });
+            })
             .catch(error => { if (!controller.signal.aborted) setManifest({ key, files: [], time: '', error: errorText(error) }); });
         return () => controller.abort();
     }, [path, key, attempt]);
@@ -279,9 +281,10 @@ export default function ExportDialog({ path, title, round, rows, activeGroupId, 
     }
     function saveScheme() {
         try {
-            localStorage.setItem(schemeKey, JSON.stringify(scheme));
+            const pattern = collectionNaming ? readScheme()?.pattern ?? scheme.pattern : scheme.pattern;
+            localStorage.setItem(schemeKey, JSON.stringify({ ...scheme, pattern }));
             setHasPreset(true);
-            setMessage('方案已保存在此浏览器。');
+            setMessage(collectionNaming ? '目录和清单设置已保存在此浏览器。' : '方案已保存在此浏览器。');
         } catch (error) { setAttachmentError(errorText(error)); }
     }
     async function pack() {
@@ -302,7 +305,7 @@ export default function ExportDialog({ path, title, round, rows, activeGroupId, 
             const authorized = entries.map(entry => {
                 if (!('file' in entry)) return entry;
                 const authorization = signed.get(exportAttachmentKey(entry.file));
-                if (!authorization) throw new Error('附件清单有变化，请刷新预览。');
+                if (!authorization || authorization.archiveName !== entry.file.archiveName) throw new Error('附件清单或汇总文件名有变化，请刷新预览。');
                 return { ...entry, file: { ...entry.file, download: authorization.download } };
             });
             await downloadZip(authorized, zipName, setMessage, controller.signal);
@@ -358,19 +361,23 @@ export default function ExportDialog({ path, title, round, rows, activeGroupId, 
                                 .map(layer => <option key={layer} value={layer}>{folderNames[layer]}</option>)}
                         </select>}
                     </div>
-                    <div className="cw-export-field">
+                    {collectionNaming ? <div className="cw-export-field">
+                        <label htmlFor="cw-export-pattern">汇总命名规则</label>
+                        <input id="cw-export-pattern" value={displayedPattern} readOnly aria-describedby="cw-export-naming-help" />
+                        <p id="cw-export-naming-help" className="cw-muted">沿用「收集设置」中的规则，扩展名按原附件保留。</p>
+                    </div> : <div className="cw-export-field">
                         <label htmlFor="cw-export-pattern">附件命名</label>
                         <input id="cw-export-pattern" ref={nameInput} value={displayedPattern} maxLength={320} aria-describedby="cw-export-naming-help"
                             aria-invalid={invalidPattern} onChange={event => changePattern(event.target.value)} />
                         <p id="cw-export-naming-help" className="cw-muted">输入固定文字，或点选字段插入。扩展名按原附件保留。</p>
                         {invalidPattern && <p className="cw-failure">{invalidToken ? '命名中含有当前批次不可用的字段，请重新选择。' : '请填写附件命名规则，并补齐字段的括号。'}</p>}
-                        <div className="cw-export-tokens">{builtinTokens.map(token =>
+                        <div className="cw-export-tokens">{attachmentNameTokens.map(token =>
                             <button type="button" key={token} className="cw-button" onClick={() => insertToken(token)}>{token}</button>)}</div>
                         {!!formFields.length && <select aria-label="插入表单字段" value="" onChange={event => {
                             const label = fieldLabels.get(event.target.value);
                             if (label) insertToken(label);
                         }}><option value="">插入表单字段</option>{formFields.map(field => <option key={field.id} value={field.id}>{field.label}</option>)}</select>}
-                    </div>
+                    </div>}
                     <div className="cw-export-field">
                         <h3>根目录附带</h3>
                         <label className="cw-check"><input type="checkbox" checked={scheme.statistics}
@@ -379,11 +386,11 @@ export default function ExportDialog({ path, title, round, rows, activeGroupId, 
                             onChange={event => setScheme(previous => ({ ...previous, missing: event.target.checked }))} />未交名单.txt</label>}
                     </div>
                     <div className="cw-export-presets">
-                        <button type="button" className="cw-button" disabled={invalidPattern} onClick={saveScheme}>保存方案</button>
+                        <button type="button" className="cw-button" disabled={invalidPattern} onClick={saveScheme}>{collectionNaming ? '保存目录和清单设置' : '保存方案'}</button>
                         {hasPreset && <button type="button" className="cw-button" onClick={() => {
                             const saved = readScheme();
-                            if (saved) { setScheme(saved); setMessage('已使用上次保存的方案。'); }
-                        }}>使用已保存方案</button>}
+                            if (saved) { setScheme(saved); setMessage(collectionNaming ? '已使用上次保存的目录和清单设置。' : '已使用上次保存的方案。'); }
+                        }}>{collectionNaming ? '使用已保存的目录和清单设置' : '使用已保存方案'}</button>}
                     </div>
                 </fieldset>
                 <section className="cw-export-preview" aria-labelledby="cw-export-preview-title">

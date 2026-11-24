@@ -490,6 +490,62 @@ test('scoped file exports validate every selected submission before signing atta
   assert.ok(authorized.data.files[0].download.headers['If-Match']);
 });
 
+test('a collection names the same verified attachment on the student receipt and in its export', async () => {
+  const f = await collectionsFixture();
+  const pattern = '{学号}-{姓名}-实验2报告';
+  const item = await f.create({
+    targetMode: 'selected', recipients: [{ studentId: 'TEST1001', name: '名单显示名' }], attachmentNamePattern: pattern,
+    round: { fields: [{ ...attachment, extensions: ['docx'] }] },
+  });
+  assert.equal(item.attachmentNamePattern, pattern);
+  assert.equal(item.hasAttachmentNamePattern, true);
+  const path = f.itemPath(item);
+  const filesPath = f.roundPath(item) + '/files';
+  const participant = (await f.call(path, { user: 'alice' })).data.item;
+  assert.equal(participant.hasAttachmentNamePattern, true);
+  assert.equal(participant.attachmentNamePattern, undefined);
+  assert.equal((await f.call(path, { user: 'bob' })).status, 404);
+  const original = '我的第二次实验.DOCX';
+  const named = 'TEST1001-甲学生-实验2报告.DOCX';
+  const started = await f.submit(item, 'alice', {
+    answers: {}, files: [{ fieldId: 'upload', name: original, size: 7, type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }],
+  });
+  assert.equal(started.status, 201);
+  assert.equal(started.data.submission.files[0].name, original);
+  assert.equal(started.data.submission.files[0].archiveName, named);
+  f.gateway.upload(f.gateway.uploads.at(-1), 'fixture');
+  const completed = (await f.complete(started.data)).data.submission;
+  assert.equal(completed.status, 'submitted');
+  assert.equal(completed.files, undefined);
+  const { id } = completed;
+  const ownFile = (await f.call(path, { user: 'alice' })).data.mySubmissions[0].files[0];
+  assert.equal(ownFile.name, original);
+  assert.equal(ownFile.archiveName, named);
+  assert.equal((await f.call(filesPath, { user: 'alice', body: { submissionIds: [id] } })).status, 403);
+  const preview = (await f.call(filesPath, { user: 'owner', body: { submissionIds: [id] } })).data;
+  assert.equal(preview.attachmentNamePattern, pattern);
+  assert.equal(preview.files[0].name, original);
+  assert.equal(preview.files[0].archiveName, named);
+  const selection = { id: ownFile.id, submissionId: id, revision: completed.revision };
+  const signed = async () => (await f.call(filesPath, { user: 'owner', body: { attachments: [selection] } })).data.files[0];
+  const exportFile = await signed();
+  assert.equal(exportFile.archiveName, named);
+  assert.equal(exportFile.download.fileName, original);
+
+  const edit = (body) => f.call(path, { user: 'owner', body });
+  for (const invalid of ['{姓名}-{伪造字段}', '{学号', '前缀/文件']) {
+    assert.equal((await edit({ revision: item.revision, attachmentNamePattern: invalid })).data.error, 'INVALID_ATTACHMENT_NAME_PATTERN');
+  }
+  const updated = (await edit({ revision: item.revision, attachmentNamePattern: '{班级}-{批次}-{附件项}-{原文件名}' })).data.item;
+  const changed = '运营支持部-首轮-附件-我的第二次实验.DOCX';
+  assert.equal((await signed()).archiveName, changed);
+  assert.equal((await f.call(`/submissions/${id}`, { user: 'alice' })).data.submission.files[0].archiveName, changed);
+  const cleared = (await edit({ revision: updated.revision, attachmentNamePattern: '' })).data.item;
+  assert.equal(cleared.hasAttachmentNamePattern, false);
+  assert.equal((await signed()).archiveName, undefined);
+  assert.equal((await f.call(`/submissions/${id}`, { user: 'alice' })).data.submission.files[0].name, original);
+});
+
 test('an attachment copy with changed bytes and an ambiguous commit retain distinct safety guarantees', async () => {
   const f = await collectionsFixture();
   const item = await f.create({ round: { fields: [note, attachment] } });

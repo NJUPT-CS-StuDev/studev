@@ -8,6 +8,56 @@ export const pinnedCollectionLinks = [
 
 export const pinnedCollections = pinnedCollectionLinks.map(({ id }) => id);
 
+export const attachmentNameTokens = /** @type {const} */ (['学号', '姓名', '班级', '批次', '收集名称', '附件项', '原文件名']);
+const attachmentNameToken = /\{([^{}]+)\}/g;
+const knownNameTokens = new Set(attachmentNameTokens);
+
+/** @param {string} pattern */
+export function validAttachmentNamePattern(pattern) {
+  const literals = pattern.replace(attachmentNameToken, (match, token) => knownNameTokens.has(token) ? '' : match);
+  return !/[{}\/\\<>:"|?*\u0000-\u001f\u007f]/u.test(literals);
+}
+
+/** @param {string} value */
+export function zipSegment(value) {
+  const name = [...value.normalize('NFC').replace(/[<>:"/\\|?*\u0000-\u001f]/gu, '_')
+    .replace(/^[. ]+|[. ]+$/g, '')].slice(0, 75).join('').replace(/[. ]+$/g, '') || '未填写';
+  return /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(name) ? '_' + name : name;
+}
+
+/** @param {string} name */
+export function splitAttachmentName(name) {
+  const index = name.lastIndexOf('.');
+  return index > 0 && index < name.length - 1 ? { stem: name.slice(0, index), extension: name.slice(index + 1) } : { stem: name, extension: '' };
+}
+
+/**
+ * @param {string} pattern
+ * @param {string} name
+ * @param {(token: string) => string | undefined} valueForToken
+ */
+export function formatAttachmentName(pattern, name, valueForToken) {
+  const { stem, extension } = splitAttachmentName(name);
+  const result = pattern.replace(attachmentNameToken, (_match, token) => token === '原文件名' ? stem : valueForToken(token) ?? '');
+  return zipSegment(result.trim() || stem) + (extension ? zipSegment('file.' + extension).slice(4) : '');
+}
+
+/** The original attachment stays intact. Both the student's record and the archive show this name. */
+export function archiveAttachmentName(item, round, record, file) {
+  const pattern = item?.attachmentNamePattern;
+  if (!pattern) return;
+  return formatAttachmentName(pattern, file.name, (token) => {
+    switch (token) {
+      case '学号': return record.studentId;
+      case '姓名': return record.studentName;
+      case '班级': return item.recipients.find(row => row.studentId === record.studentId)?.groupLabel || '待核对';
+      case '批次': return round?.label;
+      case '收集名称': return item.name;
+      case '附件项': return record.fields.find(field => field.id === file.fieldId)?.label || '附件';
+    }
+  });
+}
+
 export function isSemester(value) {
   const parts = typeof value === 'string' && /^(\d{4})-(\d{4})-([12])$/.exec(value);
   return Boolean(parts && Number(parts[2]) === Number(parts[1]) + 1);

@@ -1,7 +1,7 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { api, errorText } from '../api';
-import { pinnedCollections, semesterLabel } from '../../collections.mjs';
+import { attachmentNameTokens, pinnedCollections, semesterLabel } from '../../collections.mjs';
 import { DATA_RELEASE } from '@/world/config';
 import { loadCalendar, type CalendarTerm } from '@/world/data';
 import { momentNow } from '@/world/time';
@@ -141,6 +141,30 @@ function Timing({ value, patch, reopened }: { value: Round; patch: (value: Parti
         <small className="cw-muted">{reopened ? '修改截止时间后将按新的截止时间收集。' : '到期自动停止收集。留空则由管理者手动停止。'}</small></label></div>;
 }
 
+function AttachmentNaming({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+    const help = useId();
+    const input = useRef<HTMLInputElement>(null);
+    function insert(token: string) {
+        const field = input.current;
+        if (!field) return;
+        const start = field.selectionStart ?? value.length;
+        const end = field.selectionEnd ?? start;
+        const part = `{${token}}`;
+        const next = value.slice(0, start) + part + value.slice(end);
+        if (next.length > field.maxLength) return;
+        field.setRangeText(part, start, end, 'end');
+        onChange(next);
+        field.focus();
+    }
+    return <div className="cw-attachment-naming">
+        <label>汇总文件命名<input ref={input} value={value} maxLength={320} aria-describedby={help}
+            placeholder="例如 {学号}-{姓名}-实验2报告" onChange={event => onChange(event.target.value)} /></label>
+        <small id={help} className="cw-muted">各批次打包都用这条规则。提交后会显示原文件名和汇总文件名，扩展名保持原样。留空可在打包时再命名。</small>
+        <div className="cw-inline" role="group" aria-label="插入命名字段">{attachmentNameTokens.map(token =>
+            <button key={token} type="button" className="cw-button" onClick={() => insert(token)}>{token}</button>)}</div>
+    </div>;
+}
+
 export function CollectionEditor({ mode, catalog, item, currentRound, authorize, onClose, onSaved }: {
     mode: EditorMode; catalog?: Catalog; item?: Item<Round>; currentRound?: Round; authorize: () => Promise<void>; onClose: () => void; onSaved: (id: string, roundId?: string) => void;
 }) {
@@ -169,6 +193,7 @@ export function CollectionEditor({ mode, catalog, item, currentRound, authorize,
     const pinned = !!item && pinnedCollections.includes(item.id);
     const [visibility, setVisibility] = useState<Item['visibility']>(item?.visibility || 'members');
     const [showProgress, setShowProgress] = useState(item?.showProgress ?? false);
+    const [attachmentNamePattern, setAttachmentNamePattern] = useState(item?.attachmentNamePattern || '');
     const [status, setStatus] = useState<Item['status']>(item?.status || 'draft');
     const [targetMode, setTarget] = useState<TargetMode>(item?.targetMode || 'open');
     const issuerId = item?.issuer.organizationId || options[issuerChoice]?.organizationId || '';
@@ -184,7 +209,7 @@ export function CollectionEditor({ mode, catalog, item, currentRound, authorize,
         const action = (event.nativeEvent as SubmitEvent).submitter?.getAttribute('value');
         const targets = { targetMode, audienceOrganizationId, recipients: targetMode === 'selected'
             ? [...recipients.values()].map(({ studentId, name }) => ({ studentId, name })) : [] };
-        const details = { name, description, tags: lines(tags), course, term: selectedTerm, visibility, showProgress };
+        const details = { name, description, tags: lines(tags), course, term: selectedTerm, visibility, showProgress, attachmentNamePattern };
         const policy = round.policy === 'allow-late' && round.deadline !== currentRound?.deadline ? 'strict' : round.policy;
         const roundBody = { label: round.label, deadline: round.deadline, policy, fields: round.fields, requireReview: round.requireReview, allowEdit: round.allowEdit, maxPerUser: round.maxPerUser, maxSubmissions: round.maxSubmissions, submissionMode: round.submissionMode };
         setError('');
@@ -236,6 +261,7 @@ export function CollectionEditor({ mode, catalog, item, currentRound, authorize,
                 <label>标签<input placeholder="例如 实验报告、活动报名" value={tags} onChange={event => setTags(event.target.value)} /></label>
                 <label>学期<select required value={selectedTerm} onChange={event => setTerm(event.target.value)}>{semesters.map(id => <option key={id} value={id}>{semesterLabel(id)}</option>)}</select></label>
                 <CoursePicker value={course} onChange={setCourse} />
+                <AttachmentNaming value={attachmentNamePattern} onChange={setAttachmentNamePattern} />
                 <div><label className="cw-check"><input type="checkbox" checked={showProgress} onChange={event => setShowProgress(event.target.checked)} />允许参与者查看提交进度</label>
                     <small className="cw-muted">适用于全部批次。参与者可查看汇总人数，填写内容和附件仍只对本人和有管理权限的人开放。</small></div>
                 {!creating && <label>发布状态<select value={status} onChange={event => setStatus(event.target.value as Item['status'])}>{item?.status === 'draft' && <option value="draft">草稿</option>}<option value="published">已发布</option>{item?.status !== 'draft' && <option value="closed">停止收集</option>}</select></label>}

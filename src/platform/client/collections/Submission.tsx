@@ -37,7 +37,8 @@ function FileLink({ submissionId, file, authorize }: { submissionId: string; fil
         try { await authorize(); await downloadFile(submissionId, file); }
         catch (error) { setFailure(errorText(error)); }
         finally { setBusy(false); }
-    }}><Download size={16} /><span>{file.name}</span><small>{busy ? '下载中…' : bytes(file.size)}</small></button>
+    }}><Download size={16} /><span>{file.archiveName ? `原文件名 ${file.name}` : file.name}</span><small>{busy ? '下载中…' : bytes(file.size)}</small></button>
+        {file.archiveName && <p className="cw-archive-name cw-muted">汇总文件名 <span>{file.archiveName}</span></p>}
         {failure && <small className="cw-failure" role="alert">{failure}</small>}</li>;
 }
 
@@ -98,8 +99,8 @@ function prepareAttempt(round: Round, answers: Answers, files: Files, kept: Subm
     }, files: selected.map(({ file }) => file), uploaded: new Set() };
 }
 
-export function AnswerForm({ round, path, replacing, canSubmit, focus, makeup, loginUrl, authorize, onDismiss, onSaved }: {
-    round: Round; path: string; replacing?: Submission; canSubmit: boolean; focus?: boolean; makeup: boolean; loginUrl?: string;
+export function AnswerForm({ round, path, replacing, canSubmit, focus, makeup, loginUrl, archiveNaming, authorize, onDismiss, onSaved }: {
+    round: Round; path: string; replacing?: Submission; canSubmit: boolean; focus?: boolean; makeup: boolean; loginUrl?: string; archiveNaming?: boolean;
     authorize: () => Promise<void>; onDismiss?: () => void; onSaved: (submission: Submission) => void;
 }) {
     const [answers, setAnswers] = useState(() => ({ ...prefilled(round.fields), ...Object.fromEntries(Object.entries(replacing?.answers || {}).filter(([id]) => round.fields.some(field => field.id === id && field.type !== 'file'))) }));
@@ -201,6 +202,7 @@ export function AnswerForm({ round, path, replacing, canSubmit, focus, makeup, l
     }
 
     return <form className="cw-answer" onSubmit={submit} ref={form}>
+        {archiveNaming && round.fields.some(field => field.type === 'file') && <p className="cw-muted">文件名无需手动改。提交后可核对原文件名和汇总文件名。</p>}
         <AnswerFields fields={round.fields} answers={answers} kept={kept} files={files} disabled={!canSubmit || !!busy || !!pending} onAnswer={(id, value) => setAnswers(previous => ({ ...previous, [id]: value }))}
             onFile={(id, value) => setFiles(previous => ({ ...previous, [id]: value }))} onKeep={id => setKept(previous => previous.filter(file => file.id !== id))} />
         {failure && <p role="alert" className="cw-failure">{failure}</p>}
