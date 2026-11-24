@@ -13,26 +13,16 @@ function recordKey(itemId, roundId, entry) {
   return revisionKey(keys.submission(itemId, roundId, entry.submissionId), entry.expectedRevision + 1);
 }
 
-function priorEntry(id, receipt) {
-  const { record, expiresAt, expectedRevision } = receipt;
-  return { id, submissionId: record.id, studentId: studentId(record.studentId),
-    expiresAt: expiresAt + confirmationMillis, expectedRevision, phase: 'pending' };
-}
-
-export async function seedRoundQuota(repo, itemId, roundId, receipts = []) {
+async function initialRoundQuota(repo, itemId, roundId) {
   const heads = await repo.heads(keys.round(itemId, roundId));
   const records = await mapConcurrent([...heads.values()], 24, repo.readRevision);
   const completed = Object.fromEntries(records.map((row) => [row.id, studentId(row.studentId)]));
-  const live = await mapConcurrent(receipts, 24, async ([id, request]) => {
-    const entry = priorEntry(id, request);
-    return (await repo.get(recordKey(itemId, roundId, entry))) ? null : entry;
-  });
-  return { completed, active: Object.fromEntries(live.filter(Boolean).map((entry) => [entry.id, entry])) };
+  return { completed, active: {} };
 }
 
 export function roundQuota(repo, itemId, roundId, now) {
   const prefix = keys.quota(itemId, roundId);
-  const read = async () => (await repo.latest(prefix)) ?? seedRoundQuota(repo, itemId, roundId);
+  const read = async () => (await repo.latest(prefix)) ?? initialRoundQuota(repo, itemId, roundId);
 
   async function update(change, firstSnapshot) {
     for (let attempt = 0; attempt < 18; attempt++) {

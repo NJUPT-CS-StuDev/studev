@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { createCollectionsService } from '../server/collections/index.mjs';
 import { collectionKeys, locateSubmission, revisionKey } from '../server/collections/records.mjs';
-import { seedRoundQuota } from '../server/collections/quota.mjs';
 import { submissionWasLate } from '../server/collections/submissions.mjs';
 import { createIdentity } from '../server/identity.mjs';
 import { createRepository } from '../server/store.mjs';
@@ -801,33 +800,6 @@ test('replacement preserves retained files, retries cleanup and rejects noncanon
   assert.equal(f.gateway.objects.has(kept.objectKey), true);
   assert.equal(f.gateway.objects.has(legacyPath), true);
   assert.equal((await f.repo.latest(prefix)).files.filter((row) => row.fieldId === 'upload')[0].name, '新.txt');
-});
-
-test('cutover seeds a live legacy upload and current submissions without counting a completed receipt twice', async () => {
-  const f = await collectionsFixture();
-  const item = await f.create({ round: { fields: [note, attachment], submissionMode: 'multiple', maxPerUser: 1, maxSubmissions: 2 } });
-  const body = { answers: { note: '资料' }, files: [{ fieldId: 'upload', name: '资料.txt', type: 'text/plain', size: 3 }] };
-  const current = await f.submit(item, 'alice', body);
-  f.gateway.upload(f.gateway.uploads.at(-1), 'one');
-  assert.equal((await f.complete(current.data)).status, 200);
-  const pending = await f.submit(item, 'bob', body);
-  f.gateway.upload(f.gateway.uploads.at(-1), 'two');
-  const roundId = item.rounds[0].id;
-  const prefix = collectionKeys.quota(item.id, roundId);
-  for (const key of await f.repo.list(prefix + '/')) await f.repo.remove(key);
-  const receipts = [];
-  for (const { data: { receiptId } } of [current, pending]) {
-    const { payloadDigest, discarded, ...legacy } = await f.repo.get(collectionKeys.request(receiptId));
-    await f.repo.put(collectionKeys.request(receiptId), legacy);
-    receipts.push([receiptId, legacy]);
-  }
-  const seeded = await seedRoundQuota(f.repo, item.id, roundId, receipts);
-  assert.equal(Object.keys(seeded.completed).length, 1);
-  assert.deepEqual(Object.keys(seeded.active), [pending.data.receiptId]);
-  await f.repo.putNew(revisionKey(prefix, 1), { ...seeded, revision: 1 });
-  assert.equal((await f.submit(item, 'admin', body)).data.error, 'COLLECTION_FULL');
-  assert.equal((await f.complete(pending.data)).status, 200);
-  assert.equal((await f.complete(current.data)).status, 200);
 });
 
 test('only verified identities inherit unclaimed historical submissions, while anonymous history stays staff-only', async () => {

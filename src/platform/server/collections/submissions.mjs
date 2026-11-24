@@ -227,16 +227,11 @@ export function collectionSubmissions({ repo, env, now, getGateway, measure = (_
   }
 
   async function queueCleanup(id, receipt) {
-    const { record, pending, expectedRevision, expiresAt } = receipt;
-    const discarded = receipt.discarded ?? (expectedRevision ? (
-      (await repo.get(revisionKey(keys.submission(record.itemId, record.roundId, record.id), expectedRevision)))?.files
-        .filter((file) => !record.files.some((kept) => kept.objectKey === file.objectKey))
-        .map(({ id, objectKey }) => ({ id, objectKey }))
-    ) : []);
-    if (!pending.length && !discarded?.length) return;
+    const { record, pending, discarded, expiresAt } = receipt;
+    if (!pending.length && !discarded.length) return;
     const key = keys.cleanup(record.itemId, record.roundId, id);
     try {
-      await repo.putNew(key, { id, target: submissionKey(receipt), discarded: discarded || [],
+      await repo.putNew(key, { id, target: submissionKey(receipt), discarded,
         staging: pending.map((file) => file.objectKey), expiresAt });
     } catch (error) { if (!isConflict(error)) throw error; }
   }
@@ -308,7 +303,7 @@ export function collectionSubmissions({ repo, env, now, getGateway, measure = (_
     async function finish(value, snapshot) {
       await Promise.all([
         measure('quota', () => quota.saved(id, snapshot)).catch(() => {}),
-        pending.length || receipt.discarded?.length
+        pending.length || receipt.discarded.length
           ? cleanupLater(context, record.itemId, record.roundId, { id, winner: value }) : null,
         sweepOlderUploads(),
       ]);
