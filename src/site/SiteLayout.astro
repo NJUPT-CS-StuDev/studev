@@ -9,7 +9,8 @@ import PwaPanel from '../pwa/PwaPanel.astro';
 import { PRODUCT_CONFIG } from '../campus/world/product';
 import product from '../../product.json';
 import { ClientRouter } from 'astro:transitions';
-// fill: the page is one full-height application (the map) with no footer.
+// fill: the page is one full-height application (the map) with no footer. It announces `studev:settled` once its
+// first view has arrived, and downloads that are not part of that view wait for it.
 interface Props { title?: string; description?: string; active?: string; noindex?: boolean; fill?: boolean; noPwa?: boolean; }
 const { title = PRODUCT_CONFIG.APP_NAME, description = PRODUCT_CONFIG.POSITIONING, active = '', noindex = false, fill = false, noPwa = false } = Astro.props;
 const personalMenu = active !== 'login';
@@ -115,7 +116,7 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
       </div>
       {clubPage && <nav class="club-nav" aria-label="学生发展中心栏目">{clubNav.map((item) => <a class:list={[{ active: active === item.key }]} href={item.href}>{item.label}</a>)}</nav>}
     </header>
-    <main class:list={[fill && 'main-fill']}><slot /></main>
+    <main class:list={[fill && 'main-fill']} data-settles={fill ? '' : undefined}><slot /></main>
     {appPage && <div id="ai-host" class="ai-host" transition:persist="ai-host" hidden></div>}
     {!fill && <footer class="site-footer">
       <div class="footer-inner">

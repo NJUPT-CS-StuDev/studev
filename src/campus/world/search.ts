@@ -22,5 +22,11 @@ export function warmSearch() {
         if (wasm) localStorage.setItem('studev-search-kernel', wasm);
     }).catch(() => undefined);
     if (location.pathname === '/search/') { start(); return; }
-    if ('requestIdleCallback' in window) requestIdleCallback(start, { timeout: 8000 }); else setTimeout(start, 3000);
+    const idle = () => { if ('requestIdleCallback' in window) requestIdleCallback(start, { timeout: 8000 }); else setTimeout(start, 3000); };
+    // An idle main thread is not an idle network: a page whose first view is still arriving is not raced for bandwidth.
+    if (!document.querySelector('main[data-settles]')) { idle(); return; }
+    let started = false;
+    const once = () => { if (!started) { started = true; idle(); } };
+    window.addEventListener('studev:settled', once, { once: true });
+    setTimeout(once, 20_000);
 }

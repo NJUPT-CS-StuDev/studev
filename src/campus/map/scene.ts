@@ -157,6 +157,8 @@ export class CampusScene {
     }
 
     whenReady(run: () => void) { if (this.ready) run(); else this.queued.push(run); }
+    /** Runs once every tile of the current view has arrived, so bulk downloads do not take bandwidth from them. */
+    whenSettled(run: () => void) { this.whenReady(() => { if (this.map.areTilesLoaded() && this.map.loaded()) run(); else this.map.once('idle', run); }); }
     destroy() { clearTimeout(this.shadowTimer); cancelAnimationFrame(this.animation); this.map.remove(); this.labelHost.replaceChildren(); }
 
     /** The light of a moment. A chosen appearance holds it at day or night; "auto" follows the sun. */

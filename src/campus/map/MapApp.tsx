@@ -141,9 +141,14 @@ export default function MapApp() {
             onPlace: id => handlers.current.onPlace(id), onEmpty: () => handlers.current.onEmpty(), onView: () => handlers.current.onView(),
         });
         instance.whenReady(() => { if (!cancelled) setScene(instance); });
-        void Promise.all([fetchJson<ModelIndex>(`${spaceBase()}/models.json`), fetch(`${spaceBase()}/models.bin.gzip`).then(response => { if (!response.ok || !response.body) throw new Error(String(response.status)); return new Response(response.body.pipeThrough(new DecompressionStream('gzip'))).arrayBuffer(); })])
-            .then(([index, bytes]) => { if (!cancelled) instance.showModels(index, bytes); })
-            .catch(() => undefined); // The plain forms keep standing where the models did not arrive.
+        // The buildings, and the page's other bulk downloads, follow the first view instead of competing with it.
+        instance.whenSettled(() => {
+            if (cancelled) return;
+            window.dispatchEvent(new Event('studev:settled'));
+            void Promise.all([fetchJson<ModelIndex>(`${spaceBase()}/models.json`), fetch(`${spaceBase()}/models.bin.gzip`).then(response => { if (!response.ok || !response.body) throw new Error(String(response.status)); return new Response(response.body.pipeThrough(new DecompressionStream('gzip'))).arrayBuffer(); })])
+                .then(([index, bytes]) => { if (!cancelled) instance.showModels(index, bytes); })
+                .catch(() => undefined); // The plain forms keep standing where the models did not arrive.
+        });
         return () => { cancelled = true; instance.destroy(); setScene(null); };
     }, [world]); // eslint-disable-line react-hooks/exhaustive-deps
 
