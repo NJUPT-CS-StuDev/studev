@@ -86,3 +86,20 @@ test('a known revision proves itself latest without a listing, and any newer one
   assert.equal(lists, 3, 'a stale hint falls back to the authoritative listing');
   assert.equal((await repo.latest(prefix, 8, 7)).securityVersion, 'three', 'a hint beyond the head is never trusted');
 });
+
+test('a span of revisions read at once finds the latest before the first gap', async () => {
+  const store = memoryBlob();
+  const repo = createRepository(store, { secret: 'synthetic-revision-test-secret-only' });
+  const prefix = 'collection/submissions/span';
+  const list = store.list;
+  let lists = 0;
+  store.list = async (options) => { lists++; return list(options); };
+  assert.equal(await repo.latest(prefix, 8, 0, 3), null);
+  for (let revision = 0; revision < 3; revision++) await repo.append(prefix, { n: revision + 1 }, revision);
+  lists = 0;
+  assert.equal((await repo.latest(prefix, 8, 0, 3)).n, 3);
+  assert.equal(lists, 1, 'three present revisions leave no gap in a span of three, so the listing decides');
+  lists = 0;
+  assert.equal((await repo.latest(prefix, 8, 0, 4)).n, 3);
+  assert.equal(lists, 0);
+});

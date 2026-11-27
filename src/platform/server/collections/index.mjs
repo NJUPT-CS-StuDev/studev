@@ -240,8 +240,11 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
       const authentication = measure('auth', () => identity.authenticate(request, { required: write || onPeople || onMine || Boolean(submissionMatch), csrf: write }));
       if (onMine) {
         const { user } = await authentication;
+        // Listed only for a signed-in reader, alongside the reader's own records.
+        const heads = repo.heads(keys.definitions);
+        heads.catch(() => {});
         const records = await myRecords(repo, user);
-        return response({ items: ownHistory(await historyItems(repo, records), records) });
+        return response({ items: ownHistory(await historyItems(repo, records, heads), records) });
       }
       const itemId = itemMatch?.[1];
       const [auth, orgs, available, item] = await Promise.all([

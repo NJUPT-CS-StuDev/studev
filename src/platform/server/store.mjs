@@ -43,16 +43,18 @@ export function createRepository(store, { now = Date.now, secret, revisions } = 
   async function list(prefix) {
     return (await entries(prefix)).map((b) => b.key.slice(ROOT.length)).sort();
   }
-  async function latest(prefix, width = 8, known) {
+  async function latest(prefix, width = 8, known, span = 1) {
     // Only immutable, conditionally reserved revisions decide the latest
     // value. A delayed writer cannot publish an older mutable snapshot.
-    // Revisions are reserved densely (n + 1 only after n), so a caller that
-    // knows a recent revision n proves it is still the latest by reading n and
-    // finding n + 1 absent: one round of simple reads instead of a listing.
+    // Revisions are reserved densely (n + 1 only after n), so reading a known
+    // revision n and the span after it finds the latest in one round of simple
+    // reads: the revision before the first absent one, when all before it are
+    // present. Only a span with no gap falls back to a listing.
     if (Number.isSafeInteger(known) && known >= 0) {
       const at = (n) => `${prefix}/${String(n).padStart(width, '0')}.json`;
-      const [value, next] = await Promise.all([known ? get(at(known)) : null, get(at(known + 1))]);
-      if (next === null && (value !== null || known === 0)) return value;
+      const values = await Promise.all(Array.from({ length: span + 1 }, (_, i) => known + i ? get(at(known + i)) : null));
+      const gap = values.findIndex((value, i) => i > 0 && value === null);
+      if (gap > 0 && (known === 0 || values.slice(0, gap).every((value) => value !== null))) return values[gap - 1];
     }
     const offset = ROOT.length + prefix.length + 1;
     let tip;
@@ -91,7 +93,8 @@ export function createRepository(store, { now = Date.now, secret, revisions } = 
   }
   async function append(prefix, value, expectedRevision = 0) {
     if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0 || expectedRevision >= 99999999) fail(400, 'INVALID_REVISION', '记录版本无效。');
-    const current = await latest(prefix);
+    // The expected revision proves itself the latest in one round; reserving its successor then keeps revisions dense.
+    const current = await latest(prefix, 8, expectedRevision);
     if ((current?.revision || 0) !== expectedRevision) fail(409, 'REVISION_CONFLICT', '记录已更新，请刷新后重试。');
     const revision = expectedRevision + 1;
     const next = { ...value, revision };

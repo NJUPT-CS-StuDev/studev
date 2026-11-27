@@ -51,7 +51,12 @@ export function startSync() {
             // The kept session's CSRF proof lasts as long as its sign-in, so the exchange need not wait for a session
             // round trip; the platform still authenticates it, and a refused one simply goes next time.
             if (!await session()) return;
-            const reply = await api<{ tasks: Task[]; settings: Settings }>('/sync', { tasks: readTasks(), settings: settingsOf(readPreferences()) });
+            // The revisions last received let the platform confirm an unchanged account in one round of reads.
+            const account = (JSON.parse(window.localStorage.getItem('studev_auth_user') || 'null') as { id?: string } | null)?.id;
+            let known: unknown;
+            try { const saved = JSON.parse(window.localStorage.getItem('studev_sync_known') || 'null'); if (saved?.account === account) known = saved.known; } catch { /* Sent without. */ }
+            const reply = await api<{ tasks: Task[]; settings: Settings; known: { tasks: number; settings: number } }>('/sync', { tasks: readTasks(), settings: settingsOf(readPreferences()), known });
+            try { window.localStorage.setItem('studev_sync_known', JSON.stringify({ account, known: reply.known })); } catch { /* Next time without. */ }
             // A reply for a session that was signed out or replaced cannot be adopted by its successor.
             if (!window.localStorage.getItem('studev_auth_user') || generation !== window.localStorage.getItem('studev_session_generation')) return;
             const now = readTasks();

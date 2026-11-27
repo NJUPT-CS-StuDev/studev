@@ -47,7 +47,8 @@ export async function myRecords(repo, user, itemIds = null) {
     (await repo.list(prefix + itemPrefix)).map((key) => parseHistoryKey(prefix, key))));
   const locations = [...new Map(entries.flat().filter((row) => row && (!itemIds || itemIds.has(row.itemId)))
     .map((row) => [row.id, row])).values()];
-  const records = await mapConcurrent(locations, 16, ({ itemId, roundId, id }) => repo.latest(keys.submission(itemId, roundId, id)));
+  // A submission seldom passes three revisions, so those are read at once rather than listed.
+  const records = await mapConcurrent(locations, 16, ({ itemId, roundId, id }) => repo.latest(keys.submission(itemId, roundId, id), 8, 0, 3));
   return records.filter((record) => record && ownsSubmission(record, user)).sort(recency);
 }
 
@@ -167,9 +168,10 @@ export function boardFor(item, round, records, viewer, manage) {
   return { progress, board };
 }
 
-export async function historyItems(repo, records) {
-  const ids = [...new Set(records.map(record => record.itemId))];
-  const items = await mapConcurrent(ids, 16, async id => [id, await repo.latest(keys.definition(id))]);
+/** The collections some records belong to. One listing names every collection's head; `heads` may already be on its way. */
+export async function historyItems(repo, records, heads = repo.heads(keys.definitions)) {
+  const ids = [...new Set(records.map(record => record.itemId))], tips = await heads;
+  const items = await mapConcurrent(ids.filter(id => tips.has(id)), 16, async id => [id, await repo.readRevision(tips.get(id))]);
   return new Map(items.filter(([, item]) => item && !item.deleted));
 }
 

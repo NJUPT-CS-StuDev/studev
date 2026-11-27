@@ -31,6 +31,14 @@ export function syncedSettings(input) {
   return kept;
 }
 
+/** The revisions a device last received, if it says. */
+export function syncedKnown(input) {
+  if (input === undefined) return {};
+  const valid = (value) => value === undefined || (Number.isSafeInteger(value) && value >= 0 && value < 99999999);
+  if (!input || typeof input !== 'object' || Array.isArray(input) || !valid(input.tasks) || !valid(input.settings)) fail(400, 'SYNC_INVALID', '同步版本无效。');
+  return { tasks: input.tasks, settings: input.settings };
+}
+
 /**
  * One's tasks and timetable settings, the same on every device one signs in on. Nothing comes here from a device that
  * is not signed in; AI conversations and one's own model key never come here at all.
@@ -40,20 +48,28 @@ export function createSyncService({ identity, repo }) {
     if (path !== '/api/platform/sync') return null;
     if (context.request.method !== 'POST') fail(405, 'METHOD_NOT_ALLOWED', '不支持此请求方式。');
     const session = await identity.authenticate(context.request, { required: true, csrf: true });
-    await repo.throttle('sync', session.user.id, 60);
     const body = await readJson(context.request, 4 * 1024 * 1024);
-    const incoming = syncedTasks(body.tasks), settings = syncedSettings(body.settings);
-    const tasks = await merged(`sync/tasks/${session.user.id}`, 'tasks', stored => mergeTasks(stored ?? [], incoming));
-    const kept = await merged(`sync/settings/${session.user.id}`, 'settings', stored => mergeSettings(stored ?? {}, settings));
-    return response({ tasks, settings: kept });
+    const incoming = syncedTasks(body.tasks), settings = syncedSettings(body.settings), known = syncedKnown(body.known);
+    // Only a write is rate limited; a device that brings nothing new costs reads alone.
+    let limited;
+    const writing = () => (limited ||= repo.throttle('sync', session.user.id, 60));
+    const [tasks, kept] = await Promise.all([
+      merged(`sync/tasks/${session.user.id}`, 'tasks', stored => mergeTasks(stored ?? [], incoming), known.tasks, writing),
+      merged(`sync/settings/${session.user.id}`, 'settings', stored => mergeSettings(stored ?? {}, settings), known.settings, writing),
+    ]);
+    return response({ tasks: tasks.value, settings: kept.value, known: { tasks: tasks.revision, settings: kept.revision } });
   };
-  /** What is kept under a key, merged with what came: two devices may send at once, and the second merges again. */
-  async function merged(prefix, field, merge) {
+  /**
+   * What is kept under a key, merged with what came: two devices may send at once, and the second merges again. The
+   * revision the device last received proves itself still the latest in one round of simple reads.
+   */
+  async function merged(prefix, field, merge, known, writing) {
     for (let attempt = 0; attempt < 4; attempt++) {
-      const current = await repo.latest(prefix);
+      const current = await repo.latest(prefix, 8, attempt ? undefined : known);
       const value = merge(current?.[field]);
-      if (current && JSON.stringify(value) === JSON.stringify(current[field])) return value;
-      try { await repo.append(prefix, { [field]: value }, current?.revision ?? 0); return value; }
+      if (current && JSON.stringify(value) === JSON.stringify(current[field])) return { value, revision: current.revision };
+      await writing();
+      try { return { value, revision: (await repo.append(prefix, { [field]: value }, current?.revision ?? 0)).revision }; }
       catch (error) { if (!isConflict(error)) throw error; }
     }
     fail(409, 'SYNC_BUSY', '另一台设备正在同步，请稍后再试。');
