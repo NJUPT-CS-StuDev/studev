@@ -8,7 +8,7 @@ const RUNTIME = `${APP_ORIGIN}/app-release.json`;
 const CURRENT = '/__studev_current_release__';
 let knownOrigins;
 const SHELL_PATHS = ['/', '/map/', '/search/'];
-const PUBLIC_PAGE = new Set(SHELL_PATHS);
+const PAGE = /^\/(?:[A-Za-z0-9_-]+\/)*$/;
 const saved = new Set();
 
 async function announce(message) {
@@ -16,31 +16,76 @@ async function announce(message) {
     clients.forEach(client => client.postMessage(message));
 }
 
+/** The bundled assets a page, script or stylesheet names, as absolute URLs. */
+function references(text, base) {
+    // Vite emits absolute template-literal asset URLs. Relative strings are only
+    // dependencies when imported or passed to new URL; WASM glue also contains
+    // synthetic module identifiers such as "./kernel_bg.js" that are never fetched.
+    return [
+        ...text.matchAll(/["'`(,\s](\/_astro\/[^"'`()\s<>,]+)(?=["'`()\s,])/g),
+        ...text.matchAll(/\b(?:from|import)\s*(?:\(\s*)?["'`]((?:\.\.?\/)[^"'`]+)["'`]/g),
+        ...text.matchAll(/\bnew\s+URL\(\s*["'`]((?:\.\.?\/)[^"'`]+)["'`]/g),
+    ].map(match => match[1]).filter(reference => !reference.includes('${')).map(reference => new URL(reference, base))
+        .filter(asset => asset.origin === self.location.origin && asset.pathname.startsWith('/_astro/')).map(asset => asset.href);
+}
+const followed = type => /(javascript|text\/css|text\/html)/.test(type);
+
 async function remember(url, cache, recursive = false) {
     const absolute = new URL(url, self.location.origin).href;
     if (saved.has(absolute)) return;
     saved.add(absolute);
     try {
-        const response = await fetch(absolute, { credentials: 'omit' });
-        if (!response.ok || response.status === 206) throw new Error(`HTTP ${response.status}`);
-        await cache.put(absolute, response.clone());
-        const type = response.headers.get('Content-Type') || '';
-        if (!recursive || !/(javascript|text\/css|text\/html)/.test(type)) return;
-        const text = await response.text();
-        // Vite emits absolute template-literal asset URLs. Relative strings are only
-        // dependencies when imported or passed to new URL; WASM glue also contains
-        // synthetic module identifiers such as "./kernel_bg.js" that are never fetched.
-        const references = [
-            ...text.matchAll(/["'`(,\s](\/_astro\/[^"'`()\s<>,]+)(?=["'`()\s,])/g),
-            ...text.matchAll(/\b(?:from|import)\s*(?:\(\s*)?["'`]((?:\.\.?\/)[^"'`]+)["'`]/g),
-            ...text.matchAll(/\bnew\s+URL\(\s*["'`]((?:\.\.?\/)[^"'`]+)["'`]/g),
-        ].map(match => match[1]);
-        await Promise.all(references.map(reference => {
-            const asset = new URL(reference, absolute);
-            if (reference.includes('${') || asset.origin !== self.location.origin || !asset.pathname.startsWith('/_astro/')) return;
-            return remember(asset.href, cache, true);
-        }));
+        // Bundled assets are named by their content, so a saved one is final; pages and data are fetched again.
+        let response = new URL(absolute).pathname.startsWith('/_astro/') ? await cache.match(absolute) : undefined;
+        if (!response) {
+            response = await fetch(absolute, { credentials: 'omit' });
+            if (!response.ok || response.status === 206) throw new Error(`HTTP ${response.status}`);
+            await cache.put(absolute, response.clone());
+        }
+        if (!recursive || !followed(response.headers.get('Content-Type') || '')) return;
+        await Promise.all(references(await response.text(), absolute).map(asset => remember(asset, cache, true)));
     } catch (error) { saved.delete(absolute); throw error; }
+}
+
+/** Every bundled asset a saved page reaches, read from the saved copies alone. */
+async function reach(cache, roots) {
+    const seen = new Set(), queue = [...roots];
+    while (queue.length) {
+        const [url, text] = queue.pop();
+        for (const asset of references(text, url)) {
+            if (seen.has(asset)) continue;
+            seen.add(asset);
+            const response = await cache.match(asset);
+            if (response && followed(response.headers.get('Content-Type') || '')) queue.push([asset, await response.text()]);
+        }
+    }
+    return seen;
+}
+
+/**
+ * A page is shown from its saved copy at once and confirmed from the network behind it. A copy is saved only together
+ * with every bundled asset it reaches, so a saved page always runs, even after a deployment removed its old assets
+ * from the server; assets only the replaced copy reached are then let go.
+ */
+async function page(event, request, path) {
+    const cache = await caches.open(SHELL);
+    const kept = await cache.match(path);
+    const network = fetch(request).then(response => [response, response.clone(), response.clone()]);
+    event.waitUntil(network.then(async ([, copy, saved]) => {
+        const type = copy.headers.get('Content-Type') || '';
+        if (!copy.ok || copy.redirected || !type.includes('text/html')) return;
+        const html = await copy.text(), before = kept && await kept.clone().text();
+        if (html === before) return;
+        await Promise.all(references(html, copy.url || request.url).map(asset => remember(asset, cache, true)));
+        await cache.put(path, saved);
+        if (!before) return;
+        const pages = await Promise.all((await cache.keys()).filter(key => new URL(key.url).pathname.endsWith('/'))
+            .map(async key => [key.url, await (await cache.match(key)).text()]));
+        const live = await reach(cache, pages);
+        for (const asset of await reach(cache, [[request.url, before]])) if (!live.has(asset)) await cache.delete(asset);
+    }).catch(() => undefined));
+    if (kept) return kept;
+    try { return (await network)[0]; } catch { return Response.error(); }
 }
 
 async function saveFiles(paths, cache, recursive = false) {
@@ -176,16 +221,9 @@ self.addEventListener('fetch', event => {
         return;
     }
     if (request.mode === 'navigate') {
-        // Account, forms and submission pages are never written to an offline cache.
-        if (!PUBLIC_PAGE.has(path)) return;
-        event.respondWith((async () => {
-            const cache = await caches.open(SHELL);
-            try {
-                const response = await fetch(request);
-                if (response.ok) await cache.put(path, response.clone());
-                return response;
-            } catch { return (await cache.match(path)) || Response.error(); }
-        })());
+        // Pages are static shells: what anyone sees in them comes from the platform afterwards, never from the page.
+        if (url.origin !== self.location.origin || !PAGE.test(path)) return;
+        event.respondWith(page(event, request, path));
         return;
     }
     if (!publicData && !path.startsWith('/_astro/') && !path.startsWith('/pwa-icons/') && path !== '/manifest.webmanifest') return;

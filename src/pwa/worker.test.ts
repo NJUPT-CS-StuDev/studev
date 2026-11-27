@@ -13,7 +13,7 @@ function harness() {
     const caches = {
         async open(name: string) {
             const store = stores.get(name) || new Map<string, Response>(); stores.set(name, store);
-            return { async match(input: string | Request) { return store.get(key(input))?.clone(); }, async put(input: string | Request, response: Response) { store.set(key(input), response.clone()); } };
+            return { async match(input: string | Request) { return store.get(key(input))?.clone(); }, async put(input: string | Request, response: Response) { store.set(key(input), response.clone()); }, async keys() { return [...store.keys()].map(url => new Request(url)); }, async delete(input: string | Request) { return store.delete(key(input)); } };
         }, async keys() { return [...stores.keys()]; }, async delete(name: string) { return stores.delete(name); },
     };
     const fetch = vi.fn(async (input: string | Request) => {
@@ -118,5 +118,27 @@ describe('offline worker', () => {
         app.fetch.mockRejectedValue(new Error('offline'));
         const response = await app.dispatch('fetch', new Request('https://new-data.example/space/map1/test/basemap.pmtiles', { headers: { Range: 'bytes=0-1' } }));
         expect(response?.status).toBe(206);
+    });
+    it('shows a saved page at once, saves a new one only with every asset it reaches, and lets go of assets only the old one reached', async () => {
+        const app = harness();
+        const html = (asset: string) => new Response(`<script type="module" src="/_astro/${asset}"></script>`, { headers: { 'Content-Type': 'text/html' } });
+        const navigate = (path: string) => app.dispatch('fetch', { url: `${origin}${path}`, method: 'GET', mode: 'navigate', headers: new Headers() } as unknown as Request);
+        let build = 'one.js';
+        app.fetch.mockImplementation(async (input: string | Request) => {
+            const path = new URL(typeof input === 'string' ? input : input.url, origin).pathname;
+            if (path === '/forms/') return html(build);
+            if (path === `/_astro/${build}`) return new Response(`import "./${build.replace('.js', '-lazy.js')}";`, { headers: { 'Content-Type': 'application/javascript' } });
+            return new Response('chunk', { headers: { 'Content-Type': 'application/javascript' } });
+        });
+        expect(await (await navigate('/forms/'))!.text()).toContain('one.js');
+        const shell = app.stores.get('studev-shell-fixture')!;
+        expect([...shell.keys()].sort()).toEqual([`${origin}/_astro/one-lazy.js`, `${origin}/_astro/one.js`, `${origin}/forms/`]);
+        build = 'two.js';
+        app.fetch.mockClear();
+        expect(await (await navigate('/forms/'))!.text()).toContain('one.js');
+        expect([...shell.keys()].sort()).toEqual([`${origin}/_astro/two-lazy.js`, `${origin}/_astro/two.js`, `${origin}/forms/`]);
+        app.fetch.mockRejectedValue(new Error('offline'));
+        expect(await (await navigate('/forms/'))!.text()).toContain('two.js');
+        expect(await navigate('/never-seen/')).toMatchObject({ type: 'error' });
     });
 });
