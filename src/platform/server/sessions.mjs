@@ -1,4 +1,4 @@
-import { randomBytes, randomUUID } from 'node:crypto';
+import { createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { digest } from './crypto.mjs';
 import { fail, text } from './common.mjs';
 import { isConflict } from './store.mjs';
@@ -8,6 +8,7 @@ const DAY_MS = 86400000;
 const IDLE_MS = 30 * DAY_MS;
 const maxExpiry = (session, role) => Date.parse(session.createdAt) + (role === 'user' ? 180 : 90) * DAY_MS;
 const TOKEN = /^[A-Za-z0-9_-]{43}$/;
+export const ACCESS = /^[A-Za-z0-9_-]{120,400}$/;
 const ID = /^[a-f0-9-]{36}$/;
 const bootstrapRoute = (path) => ['/api/platform/auth/register', '/api/platform/auth/login', '/api/platform/auth/refresh'].includes(path);
 export const bearerBootstrap = (request, path) => bootstrapRoute(path) && !request.headers.has('origin') && !request.headers.has('cookie') && !request.headers.has('sec-fetch-site');
@@ -15,13 +16,30 @@ export const hasAuthorization = (request) => request.headers.has('authorization'
 
 // All security decisions use immutable records/conditional creation. A stale
 // materialized revision can never undo a revocation or spend a refresh twice.
-export function createSessions({ repo, now, loadUser }) {
+export function createSessions({ repo, now, loadUser, secret }) {
   const sessionKey = (id) => `identity/devices/sessions/${id}.json`;
   const expiryKey = (id) => `identity/devices/expiry/${id}.json`;
   const revokedKey = (id) => `identity/devices/revoked/${id}.json`;
   const tokenKey = (kind, token) => `identity/devices/${kind}/${digest(token)}.json`;
   const loginPrefix = (userId) => `identity/devices/logins/${userId}`;
-  const loginTip = (userId) => repo.latest(loginPrefix(userId), 12);
+  const loginTip = (userId, known) => repo.latest(loginPrefix(userId), 12, known);
+  const statePrefix = (id) => `identity/devices/state/${id}`;
+  // An access credential is a sealed claim, not a stored record: it names its
+  // session and owner, its deadline, and the revisions of the session state,
+  // login head and account it was issued against. Every request still reads
+  // those authoritative records, so revocation stays immediate; the claim only
+  // lets all of them be read at once, without a listing.
+  const mac = (body) => createHmac('sha256', secret).update('studev-access\0').update(body).digest();
+  function seal(claim) {
+    const body = Buffer.from(JSON.stringify(claim));
+    return Buffer.concat([body, mac(body)]).toString('base64url');
+  }
+  function unseal(token) {
+    if (typeof token !== 'string' || !ACCESS.test(token)) return null;
+    const raw = Buffer.from(token, 'base64url'), body = raw.subarray(0, -32), tag = raw.subarray(-32);
+    if (tag.length !== 32 || !timingSafeEqual(tag, mac(body))) return null;
+    try { return JSON.parse(body.toString()); } catch { return null; }
+  }
   function device(value) {
     if (typeof value !== 'string' || !/^[A-Za-z0-9_-]{16,128}$/.test(value)) fail(400, 'INVALID_DEVICE', '设备标识无效，请重新安装后重试。');
     return digest(value);
@@ -31,13 +49,14 @@ export function createSessions({ repo, now, loadUser }) {
     catch (error) { if (!isConflict(error)) throw error; }
   }
   async function validSession(id, known = {}) {
+    const seen = known.revisions ?? [];
     const [original, revoked, state, ticketIdentity, renewal] = await Promise.all([
-      repo.get(sessionKey(id)), repo.get(revokedKey(id)), repo.latest(`identity/devices/state/${id}`),
+      repo.get(sessionKey(id)), repo.get(revokedKey(id)), repo.latest(statePrefix(id), 8, seen[0]),
       // A ticket names the immutable session's owner, so these authoritative
       // reads can run alongside the session reads.
       known.userId ? Promise.all([
-        loginTip(known.userId),
-        loadUser(known.userId),
+        loginTip(known.userId, seen[1]),
+        loadUser(known.userId, seen[2]),
       ]) : null,
       // Access and refresh already carry a deadline. Only inventory needs to
       // read the newest deadline rather than the caller's own ticket.
@@ -58,15 +77,13 @@ export function createSessions({ repo, now, loadUser }) {
     return { user, session, loginHead: tip };
   }
 
-  async function issue(session) {
-    const accessToken = randomBytes(32).toString('base64url'), refreshToken = randomBytes(32).toString('base64url');
+  async function issue(session, user, generation) {
+    const refreshToken = randomBytes(32).toString('base64url');
     const started = now();
     if (!(session.expiresAt > started)) fail(401, 'TOKEN_INVALID', '登录已失效，请重新登录。');
     const expiresAt = Math.min(started + ACCESS_SECONDS * 1000, session.expiresAt);
-    await Promise.all([
-      repo.putNew(tokenKey('access', accessToken), { sessionId: session.id, userId: session.userId, expiresAt, sessionExpiresAt: session.expiresAt }),
-      repo.putNew(tokenKey('refresh', refreshToken), { sessionId: session.id, userId: session.userId, expiresAt: session.expiresAt }),
-    ]);
+    const accessToken = seal({ s: session.id, u: session.userId, x: expiresAt, e: session.expiresAt, r: [session.revision ?? 0, generation, user.revision] });
+    await repo.putNew(tokenKey('refresh', refreshToken), { sessionId: session.id, userId: session.userId, expiresAt: session.expiresAt });
     return { tokenType: 'Bearer', accessToken, refreshToken, expiresIn: Math.max(0, Math.floor((expiresAt - now()) / 1000)), refreshExpiresAt: session.expiresAt, deviceSessionId: session.id };
   }
   async function start(user, body, { kind, mfaVerified, verified }) {
@@ -102,7 +119,7 @@ export function createSessions({ repo, now, loadUser }) {
     await repo.putNew(`${loginPrefix(user.id)}/${String(generation).padStart(12, '0')}.json`, {
       devices, generation, expiresAt: maxExpiry(session, user.role),
     });
-    return { credentials: await issue(session), session };
+    return { credentials: await issue(session, user, generation), session };
   }
   async function refresh(body, kind) {
     const hash = device(body.deviceId);
@@ -110,7 +127,7 @@ export function createSessions({ repo, now, loadUser }) {
     if (typeof body.refreshToken !== 'string' || !TOKEN.test(body.refreshToken)) fail(401, 'TOKEN_INVALID', '登录已失效，请重新登录。');
     const ticket = await repo.get(tokenKey('refresh', body.refreshToken));
     if (!ticket || ticket.expiresAt <= now()) fail(401, 'TOKEN_INVALID', '登录已失效，请重新登录。');
-    const { user, session } = await validSession(ticket.sessionId, { userId: ticket.userId, expiresAt: ticket.expiresAt });
+    const { user, session, loginHead } = await validSession(ticket.sessionId, { userId: ticket.userId, expiresAt: ticket.expiresAt });
     if (session.kind !== kind) fail(401, 'TOKEN_INVALID', '登录已失效，请重新登录。');
     if (hash !== session.deviceHash) fail(401, 'TOKEN_INVALID', '登录已失效，请重新登录。');
     const started = now();
@@ -124,7 +141,7 @@ export function createSessions({ repo, now, loadUser }) {
     }
     const expiresAt = body.foreground === true ? Math.min(Math.max(session.expiresAt, started + IDLE_MS), limit) : session.expiresAt;
     const renewed = { ...session, expiresAt };
-    const credentials = await issue(renewed);
+    const credentials = await issue(renewed, user, loginHead.generation);
     // A refresh ticket has only one successor, so this inventory snapshot
     // advances along a single chain. Authorization always uses the ticket
     // deadline and the immutable family/revocation records, never this view.
@@ -132,10 +149,9 @@ export function createSessions({ repo, now, loadUser }) {
     return { credentials, session: renewed };
   }
   async function authenticate(token, kind) {
-    if (typeof token !== 'string' || !TOKEN.test(token)) fail(401, 'TOKEN_INVALID', '登录已失效，请重新登录。');
-    const ticket = await repo.get(tokenKey('access', token));
-    if (!ticket || ticket.expiresAt <= now()) fail(401, 'TOKEN_INVALID', '登录已失效，请重新登录。');
-    const { user, session, loginHead } = await validSession(ticket.sessionId, { userId: ticket.userId, expiresAt: ticket.sessionExpiresAt });
+    const claim = unseal(token);
+    if (!claim || !(claim.x > now()) || !ID.test(claim.s) || typeof claim.u !== 'string' || !Array.isArray(claim.r)) fail(401, 'TOKEN_INVALID', '登录已失效，请重新登录。');
+    const { user, session, loginHead } = await validSession(claim.s, { userId: claim.u, expiresAt: claim.e, revisions: claim.r });
     if (session.kind !== kind) fail(401, 'TOKEN_INVALID', '登录已失效，请重新登录。');
     return { user, session, sessionId: session.id, kind, mfaVerified: session.mfaVerified, loginHead };
   }

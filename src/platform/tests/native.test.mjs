@@ -117,12 +117,6 @@ for (const [role, maximumDays] of [['user', 180], ['admin', 90], ['owner', 90]])
 
 test('an existing fixed-expiry browser session rolls only after foreground renewal without a new login', async () => {
   const f = await fixture();
-  const cookieValue = f.browser.cookie.split('=')[1];
-  const [access] = cookieValue.split('.');
-  const key = `platform-v1/identity/devices/access/${digest(access)}.json`;
-  const legacy = f.store.values.get(key);
-  delete legacy.sessionExpiresAt;
-  f.store.values.set(key, legacy);
   const started = f.now();
   const original = (await f.browser.call('/auth/devices')).body.items[0];
 
@@ -234,8 +228,9 @@ test('login and device reads stay bounded by current families, not obsolete devi
   const devices = await f.call('/auth/devices', undefined, second.body.accessToken);
   assert.equal(devices.status, 200);
   assert.equal(devices.body.items.length, 3);
-  assert.equal(lists.filter(key => key.includes('/devices/logins/')).length, 1, 'all device checks share this request’s authenticated login head');
-  assert.equal(reads.filter(key => key.startsWith(`platform-v1/identity/users/${f.user.id}/`) && /\/\d{8}\.json$/.test(key)).length, 1, 'all device checks share this request’s authenticated immutable account revision');
+  assert.ok(!lists.some(key => key.includes('/devices/logins/')), 'the credential names its revisions, and device checks share its login head');
+  assert.ok(lists.every(key => key.includes('/devices/state/')), 'only the other devices’ own state is listed');
+  assert.equal(reads.filter(key => key.startsWith(`platform-v1/identity/users/${f.user.id}/`) && /\/\d{8}\.json$/.test(key)).length, 2, 'one account revision and its absent successor, shared by all device checks');
   assert.ok(!reads.some(key => key.startsWith('platform-v1/identity/qq/')), 'existing credentials do not reinitialize the owner');
   assert.ok(!reads.some(key => key.includes('retired-')));
   assert.equal((await f.call(`/auth/devices/${first.body.deviceSessionId}/revoke`, {}, second.body.accessToken)).status, 200);
@@ -322,7 +317,7 @@ test('a published login head retains its device during delayed token issuance on
   const resume = new Promise(resolve => { release = resolve; });
   let delayed = false;
   f.store.setJSON = async (key, ...args) => {
-    if (!delayed && key.startsWith('platform-v1/identity/devices/access/')) {
+    if (!delayed && key.startsWith('platform-v1/identity/devices/refresh/')) {
       delayed = true; entered(); await resume;
     }
     return write(key, ...args);

@@ -42,7 +42,7 @@ test('web credentials survive EdgeOne header serialization as one cookie', async
 
   const login = await call('/auth/login', { method: 'POST', body: { studentId: env.PLATFORM_OWNER_STUDENT_ID, password } });
   assert.equal(login.status, 200);
-  assert.match(cookie, /^__Host-studev_platform=[A-Za-z0-9_-]{43}\.[A-Za-z0-9_-]{43}$/);
+  assert.match(cookie, /^__Host-studev_platform=[A-Za-z0-9_-]{120,400}\.[A-Za-z0-9_-]{43}$/);
   assert.equal(login.headers.getSetCookie().length, 1);
   assert.equal((await call('/auth/session')).status, 200);
 

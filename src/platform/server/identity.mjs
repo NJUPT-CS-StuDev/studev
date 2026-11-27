@@ -65,7 +65,7 @@ export function createIdentity({ repo, env, now = Date.now, academicYear, mailer
     fail(503, 'NOT_CONFIGURED', '平台身份配置尚未完成。');
   }
   let bootstrapPromise;
-  const sessions = createSessions({ repo, now, loadUser: (id) => repo.latest(userKey(id)) });
+  const sessions = createSessions({ repo, now, secret: sessionSecret, loadUser: (id, known) => repo.latest(userKey(id), 8, known) });
   const authRequests = new WeakMap();
   const authSessionKey = (auth) => `identity/devices/state/${auth.sessionId}`;
   function appointmentYear() {
@@ -124,7 +124,7 @@ export function createIdentity({ repo, env, now = Date.now, academicYear, mailer
   }
   function cookieCredentials(value) {
     const parts = String(value || '').split('.');
-    return parts.length === 2 && TOKEN.test(parts[0]) && TOKEN.test(parts[1]) ? { accessToken: parts[0], refreshToken: parts[1] } : null;
+    return parts.length === 2 && /^[A-Za-z0-9_-]{1,400}$/.test(parts[0]) && TOKEN.test(parts[1]) ? { accessToken: parts[0], refreshToken: parts[1] } : null;
   }
   function credentialResponse({ credentials, session }, body = {}) {
     const payload = { ...body, deviceSessionId: session.id, csrfToken: session.csrfToken };
@@ -152,7 +152,7 @@ export function createIdentity({ repo, env, now = Date.now, academicYear, mailer
   async function authenticate(request, { required = false, staff = false, owner = false, csrf = false, allowEnrollment = false } = {}) {
     const kind = hasAuthorization(request) ? 'bearer' : 'cookie';
     const header = request.headers.get('authorization') || '';
-    const token = kind === 'bearer' ? /^Bearer ([A-Za-z0-9_-]{43})$/i.exec(header)?.[1] : cookieCredentials(cookieValue(request, cookieName))?.accessToken;
+    const token = kind === 'bearer' ? /^Bearer ([A-Za-z0-9_-]+)$/i.exec(header)?.[1] : cookieCredentials(cookieValue(request, cookieName))?.accessToken;
     if (!authRequests.has(request)) authRequests.set(request,
       kind === 'cookie' && !token ? Promise.resolve(null) : sessions.authenticate(token, kind));
     const auth = await authRequests.get(request);

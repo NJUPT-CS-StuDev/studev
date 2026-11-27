@@ -51,9 +51,14 @@ and refresh credentials only as HttpOnly, SameSite=Strict, Secure host cookies
 using Android Keystore or Windows DPAPI. Refresh cookies never appear in JSON.
 
 All devices share `platform-v1/identity/devices/`: immutable sessions, per-user
-indices, hashed access/refresh tickets, spent/revoked markers, login generations,
+indices, hashed refresh tickets, spent/revoked markers, login generations,
 versioned security state and the current deadline used by device inventory.
-Access expires in at most 600 seconds. Foreground use renews the 30-day idle
+An access credential is not stored: it is an HMAC-sealed claim of its session,
+owner, deadline and the revisions of the session state, login head and account it
+was issued against. Each request reads those authoritative records in one round of
+simple reads: a revision n is proven latest by n + 1 being absent (revisions are
+reserved densely), and only a newer revision falls back to a listing. Revocation
+stays immediate. Access expires in at most 600 seconds. Foreground use renews the 30-day idle
 window on credential rotation, up to 180 days from the sign-in for ordinary
 accounts and 90 days for administrators and owners. Existing valid sessions
 adopt this policy on their next foreground refresh. Rotation spends one atomic

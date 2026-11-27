@@ -66,3 +66,23 @@ test('warm immutable reads still check the strong revision list and respect chan
   for (const key of await writer.list(`${prefix}/`)) await writer.remove(key);
   assert.equal(await repo.latest(prefix), null);
 });
+
+test('a known revision proves itself latest without a listing, and any newer one still wins', async () => {
+  const store = memoryBlob();
+  const repo = createRepository(store, { secret: 'synthetic-revision-test-secret-only' });
+  const prefix = 'identity/users/known-revision';
+  const list = store.list;
+  let lists = 0;
+  store.list = async (options) => { lists++; return list(options); };
+  assert.equal(await repo.latest(prefix, 8, 0), null);
+  await repo.append(prefix, { securityVersion: 'one' }, 0);
+  lists = 0;
+  assert.equal((await repo.latest(prefix, 8, 1)).securityVersion, 'one');
+  assert.equal(lists, 0);
+  await repo.append(prefix, { securityVersion: 'two' }, 1);
+  await repo.append(prefix, { securityVersion: 'three' }, 2);
+  lists = 0;
+  for (const known of [0, 1, 2]) assert.equal((await repo.latest(prefix, 8, known)).securityVersion, 'three');
+  assert.equal(lists, 3, 'a stale hint falls back to the authoritative listing');
+  assert.equal((await repo.latest(prefix, 8, 7)).securityVersion, 'three', 'a hint beyond the head is never trusted');
+});
