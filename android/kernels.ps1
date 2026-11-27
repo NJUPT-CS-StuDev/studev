@@ -6,6 +6,7 @@ param(
     [string]$DocstreamPath = 'D:\code\github\hicancan\docstream'
 )
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot '../scripts/release/kernel-source.ps1')
 $destination = Join-Path $PSScriptRoot 'kernels'
 $dependencies = (Get-Content -LiteralPath (Join-Path $PSScriptRoot '../package.json') -Raw | ConvertFrom-Json).dependencies
 $kernels = @(
@@ -16,16 +17,9 @@ $kernels = @(
 # Built afresh: nothing from an earlier kernel stays to be packaged.
 Remove-Item -LiteralPath $destination -Recurse -Force -ErrorAction SilentlyContinue
 foreach ($kernel in $kernels) {
-    $repo = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($kernel.Path)
     $release = [regex]::Match($dependencies.($kernel.Name), '/releases/download/(v[^/]+)/')
     if (-not $release.Success) { throw "Kernel must use an immutable release: $($kernel.Name)" }
-    $tag = $release.Groups[1].Value
-    $expected = (& git -C $repo rev-parse "$tag^{commit}").Trim()
-    if ($LASTEXITCODE -ne 0) { throw "Missing kernel release $tag in $repo" }
-    $actual = (& git -C $repo rev-parse HEAD).Trim()
-    if ($LASTEXITCODE -ne 0 -or $actual -ne $expected -or (& git -C $repo status --porcelain --untracked-files=no)) {
-        throw "Kernel checkout must be clean at $tag before building: $repo"
-    }
+    $repo = Get-KernelSource $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($kernel.Path) $release.Groups[1].Value
     $script = Join-Path $repo 'native/build.ps1'
     if (-not (Test-Path -LiteralPath $script)) { throw "Native kernel checkout missing: $script" }
     & $script

@@ -8,6 +8,7 @@ param(
     [string]$DocstreamPath = 'D:\code\github\hicancan\docstream'
 )
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot '../scripts/release/kernel-source.ps1')
 $destination = Join-Path $PSScriptRoot 'kernels'
 $dependencies = (Get-Content -LiteralPath (Join-Path $PSScriptRoot '../package.json') -Raw | ConvertFrom-Json).dependencies
 $kernels = @(
@@ -20,14 +21,9 @@ $kernels = @(
 Remove-Item -LiteralPath $destination -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force (Join-Path $destination 'bindings') | Out-Null
 foreach ($kernel in $kernels) {
-    $repo = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($kernel.Path)
     $release = [regex]::Match($dependencies.($kernel.Name), '/releases/download/(v[^/]+)/')
     if (-not $release.Success) { throw "Kernel must use an immutable release: $($kernel.Name)" }
-    $tag = $release.Groups[1].Value
-    $expected = (& git -C $repo rev-parse "$tag^{commit}").Trim()
-    if ($LASTEXITCODE -ne 0) { throw "Missing kernel release $tag in $repo" }
-    $actual = (& git -C $repo rev-parse HEAD).Trim()
-    if ($actual -ne $expected -or (& git -C $repo status --porcelain --untracked-files=no)) { throw "Kernel checkout must be clean at $tag before building: $repo" }
+    $repo = Get-KernelSource $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($kernel.Path) $release.Groups[1].Value
     Push-Location $repo
     try {
         & cargo build --locked --release --package $kernel.Package --target x86_64-pc-windows-msvc
