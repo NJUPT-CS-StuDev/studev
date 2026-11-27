@@ -139,7 +139,11 @@ export default function Workspace() {
         const timeout = setTimeout(() => tick(value => value + 1), Math.min(2_147_483_647, Math.ceil(remaining)));
         return () => clearTimeout(timeout);
     }, [clock, nextDeadline, clockTick]);
-    const needsCatalog = !id && !mine && catalog?.version !== version;
+    // Whether the list wants this version of the catalog. Showing a kept copy must not count as having it: the
+    // server's answer is still on its way, and the request stays open until the list is left or the version moves.
+    const listing = !id && !mine;
+    const catalogVersion = useRef<number | undefined>(undefined);
+    catalogVersion.current = catalog?.version;
     const currentError = failure?.id === id ? failure : undefined;
     useEffect(() => {
         const onPop = () => { setQuery(new URLSearchParams(location.search)); setEditor(undefined); setNotice(''); };
@@ -147,13 +151,13 @@ export default function Workspace() {
         return () => window.removeEventListener('popstate', onPop);
     }, []);
     useEffect(() => {
-        if (!needsCatalog) return;
+        if (!listing || catalogVersion.current === version) return;
         const controller = new AbortController();
         read<Catalog>('/collections', (data, receivedAt) => {
             setCatalog({ version, data, receivedAt }); setFailure(previous => previous?.id === '' ? undefined : previous);
         }, controller.signal).catch(error => { if (!controller.signal.aborted) setFailure({ id: '', message: errorText(error), status: error instanceof PlatformError ? error.status : undefined }); });
         return () => controller.abort();
-    }, [needsCatalog, version]);
+    }, [listing, version]);
     useEffect(() => {
         if (!id) return;
         const controller = new AbortController();
