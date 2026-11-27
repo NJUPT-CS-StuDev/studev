@@ -132,6 +132,9 @@ async function ownRelease() {
     for (const key of ['base', 'map_base', 'knowledge_base', 'search_base', 'texts_base']) if (release[key]) complete[key] = new URL(release[key], entry).href;
     await meta.put(CURRENT, new Response(JSON.stringify(complete), { headers: { 'Content-Type': 'application/json' } }));
     knownOrigins = new Set([complete.base, complete.map_base, complete.knowledge_base, complete.search_base, complete.texts_base].filter(Boolean).map(value => new URL(value).origin));
+    // A search engine keeps one cache per bundle it read; only the current snapshot's bundles stay.
+    const current = [complete.base, complete.search_base, complete.search_stable_base].filter(Boolean).map(value => `wasm-search ${value}/`);
+    for (const key of await caches.keys()) if (key.startsWith('wasm-search ') && !current.some(prefix => key.startsWith(prefix))) await caches.delete(key);
     return complete;
 }
 

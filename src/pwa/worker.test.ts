@@ -141,4 +141,11 @@ describe('offline worker', () => {
         expect(await (await navigate('/forms/'))!.text()).toContain('two.js');
         expect(await navigate('/never-seen/')).toMatchObject({ type: 'error' });
     });
+    it('keeps only the current snapshot\'s search caches', async () => {
+        const app = harness();
+        for (const path of ['/search/s0/', '/search/s1/', '/data/old/entities/course-search/', '/data/fixture/entities/course-search/']) await app.caches.open(`wasm-search ${origin}${path}`);
+        await app.dispatch('install');
+        const kept = (await app.caches.keys()).filter(name => name.startsWith('wasm-search ')).sort();
+        expect(kept).toEqual([`wasm-search ${origin}/data/fixture/entities/course-search/`, `wasm-search ${origin}/search/s1/`]);
+    });
 });
