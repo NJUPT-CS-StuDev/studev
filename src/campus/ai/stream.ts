@@ -1,7 +1,7 @@
 // Asking the model, its answer read as it comes. Through the platform, its events are `delta` (the next piece of what
 // it says), then `message` (the whole turn, tool calls put together) or `error`. With one's own key, the provider is
 // asked straight from this device and its stream read the same way the platform reads it (assistant.mjs).
-import { requestSession, session, type Session } from '../../platform/client/api';
+import { confirmedSession, requestSession, type Session } from '../../platform/client/api';
 import { Completion, completionRequest, type Situation, type ToolContext } from '@/world/assistant.mjs';
 import { addressError, endpoint, type Own } from './model';
 
@@ -25,7 +25,7 @@ export async function ask(messages: Message[], situation: Situation, last: boole
     // These rejections happen before the platform spends quota or calls the model.
     if (response.status === 401 && (error?.code === 'TOKEN_INVALID' || error?.code === 'AUTH_REQUIRED')) {
         signal.throwIfAborted();
-        const refreshed = await session();
+        const refreshed = await confirmedSession();
         signal.throwIfAborted();
         if (refreshed?.user.id !== current.user.id) throw new AskError('请重新登录后再发送。');
         response = await send(refreshed);

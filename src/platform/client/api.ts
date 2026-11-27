@@ -51,6 +51,7 @@ export interface Session {
     mfaRequired?: boolean;
     profileRequired?:boolean;
 }
+import { forget, keep, owner, recall, stamp } from './replica';
 export class PlatformError extends Error {
     constructor(message: string, public status = 0, public code = '') { super(message); this.name = 'PlatformError'; }
 }
@@ -222,6 +223,9 @@ async function refreshCookieSession(generation: string | null, foreground: boole
     }).finally(() => { refreshRequest = null; });
     return refreshRequest;
 }
+/** Requests that change nothing this device keeps a copy of: the ticket renewal, a download link, and campus sync,
+ *  whose tasks and settings have their own local store. */
+const unreplicated = (path: string) => path === '/auth/refresh' || path === '/sync' || path.endsWith('/download');
 export async function api<T>(path: string, body?: unknown, options: RequestInit = {}, retry = true): Promise<T> { if (!path.startsWith('/') || path.startsWith('//'))
     throw new PlatformError('请求路径无效。'); let response: Response; let generation: string | null;
     const publicCollectionRead = body === undefined && (!options.method || options.method === 'GET') &&
@@ -284,7 +288,8 @@ catch {
 } if (publicCollectionRead && credentials !== 'omit' && generation === localStorage.getItem('studev_session_generation')) {
     const csrfToken = response.headers.get('x-csrf-token');
     collectionProof = csrfToken ? { generation, csrfToken } : undefined;
-} if (path === '/auth/login' || path === '/auth/logout') {
+} if (!(body === undefined && (!options.method || options.method === 'GET')) && !unreplicated(path)) forget();
+if (path === '/auth/login' || path === '/auth/logout') {
     collectionProof = undefined;
     localStorage.removeItem('studev_session_refresh_pending');
     localStorage.removeItem(foregroundRenewal);
@@ -292,7 +297,29 @@ catch {
     else localStorage.removeItem('studev_session_generation');
 }
 return data as T; }
+/**
+ * A read shown from this device's copy at once, when there is one, and again with the server's answer when that
+ * differs. `at` is when the shown answer left the server, so clocks derived from it stay right for an old copy.
+ * Resolves once something is shown. An answer that the copy is no longer readable drops the copy and reloads the page.
+ */
+export async function read<T>(path: string, apply: (data: T, at: number) => void, signal?: AbortSignal): Promise<void> {
+    const since = stamp();
+    const kept = await recall(`${owner()}\n${path}`);
+    const fresh = api<T>(path, undefined, { signal }).then(data => {
+        const text = JSON.stringify(data);
+        const at = keep(`${owner()}\n${path}`, text, since)?.at ?? Date.now();
+        if (!signal?.aborted && text !== kept?.text) apply(data, at);
+    });
+    if (!kept) return fresh;
+    if (!signal?.aborted) apply(JSON.parse(kept.text) as T, kept.at);
+    fresh.catch(error => {
+        if (signal?.aborted || !(error instanceof PlatformError) || ![401, 403, 404].includes(error.status)) return;
+        forget();
+        location.reload();
+    });
+}
 let requestProof: { generation: string; until: number } | undefined;
+const sessionKey = () => `${owner()}\n/auth/session`;
 function rememberSession(value: Session | null) {
     currentSession = value;
     requestProof = undefined;
@@ -306,24 +333,31 @@ function rememberSession(value: Session | null) {
         else localStorage.removeItem('studev_auth_user');
         window.dispatchEvent(new Event('studev:account'));
     } catch {}
+    if (value) keep(sessionKey(), JSON.stringify(value), stamp());
+    else forget();
 }
+/** What decides which page someone may see. A copy that differs from the server here sends the page back through the gate. */
+const access = (value: Session | null) => JSON.stringify(value && [value.user.id, value.user.role, value.user.status, value.mfaVerified,
+    Boolean(value.enrollmentRequired), Boolean(value.passwordChangeRequired), Boolean(value.mfaRequired), Boolean(value.profileRequired)]);
 
-async function loadSession(): Promise<Session | null> {
+/** Asks the server. Reading the session also renews it when its short-lived pass has run out. */
+export function confirmedSession(): Promise<Session | null> {
     // Share the in-flight session lookup across components on the same page.
-    sessionRequest ||= (async () => {
-        try {
-            rememberSession(await api<Session>('/auth/session'));
-        }
-        catch (e) {
-            if (e instanceof PlatformError && e.status === 401) {
-                rememberSession(null);
-            }
-            else
-                throw e;
-        }
-        return currentSession;
-    })().finally(() => { sessionRequest = null; });
+    sessionRequest ||= api<Session>('/auth/session').then(value => value, error => {
+        if (error instanceof PlatformError && error.status === 401) return null;
+        throw error;
+    }).then(value => { rememberSession(value); return value; }).finally(() => { sessionRequest = null; });
     return sessionRequest;
+}
+/** The session this device knows, at once when it has one; the server's answer follows in the background. */
+async function loadSession(): Promise<Session | null> {
+    const kept = currentSession ? undefined : await recall(sessionKey());
+    const shown = currentSession ?? (kept ? JSON.parse(kept.text) as Session : undefined);
+    const confirmed = confirmedSession();
+    if (!shown) return confirmed;
+    currentSession ??= shown;
+    confirmed.then(value => { if (access(value) !== access(shown)) location.reload(); }, () => { /* Offline: the copy stands. */ });
+    return shown;
 }
 function sessionForPage(required: boolean, staff: boolean): Session | null {
     if (required && !currentSession) {
@@ -355,7 +389,8 @@ export async function requestSession(): Promise<Session | null> {
         !localStorage.getItem('studev_session_refresh_pending') && !localStorage.getItem(foregroundRenewal)) {
         return sessionForPage(false, false);
     }
-    return session();
+    await confirmedSession();
+    return sessionForPage(false, false);
 }
 export function safeNext(raw: string | null): string { if (!raw || !raw.startsWith('/') || raw.startsWith('//') || /[\\\x00-\x20]/.test(raw))
     return '/forms/'; try {

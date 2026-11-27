@@ -64,6 +64,13 @@ enrollment elevates only its own session. Never retry an ambiguous refresh; sign
 refreshes with Web Locks and persists a non-secret pending marker before spending
 the refresh ticket, requiring sign-in after an interrupted rotation. No credentials
 enter browser localStorage. All navigation/session checks use that same client.
+Reads cost no round trip on screen: the web client keeps an IndexedDB copy of each
+GET answer per account (`client/replica.ts`), shows it at once and then the server's
+answer when it differs. Any write, sign-in or sign-out drops the whole copy; an
+answer that began before a write is never kept; a 401/403/404 in the background drops
+the copy and reloads the page; a session copy whose access fields differ from the
+server's reloads the page through the gate. The copy never authorizes anything:
+writes and the AI stream confirm the session with the server first.
 
 Platform roles descend from `owner` through `admin` to `user`. The owner manages
 roles and other administrators. Owners and admins may list or look up users

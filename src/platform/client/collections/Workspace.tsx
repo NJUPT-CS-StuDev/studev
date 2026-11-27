@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, ClipboardList, Plus, Search, UsersRound } from 'lucide-react';
-import { api, collectionAuthorized, errorText, PlatformError, session } from '../api';
+import { collectionAuthorized, read, errorText, PlatformError, session } from '../api';
 import { pinnedCollections, semesterLabel } from '../../collections.mjs';
 import type { EditorMode } from './Editor';
 import { CollectionBadge, Details, WorkspaceLink, type Navigate } from './Detail';
@@ -80,9 +80,7 @@ function Mine({ navigate }: { navigate: Navigate }) {
     const [signedOut, setSignedOut] = useState(false);
     useEffect(() => {
         const controller = new AbortController();
-        api<{ items: Submission[] }>('/collections/mine', undefined, { signal: controller.signal }).then(result => {
-            if (!controller.signal.aborted) { setItems(result.items); setError(''); }
-        }).catch(failure => {
+        read<{ items: Submission[] }>('/collections/mine', result => { setItems(result.items); setError(''); }, controller.signal).catch(failure => {
             if (controller.signal.aborted) return;
             if (failure instanceof PlatformError && failure.status === 401) setSignedOut(true);
             else setError(errorText(failure));
@@ -124,7 +122,8 @@ export default function Workspace() {
     const activeDetail = detail?.id === id ? detail.data : undefined;
     const info = activeDetail || activeCatalog;
     const clock = id ? activeDetail && detail : activeCatalog && catalog;
-    const now = clock ? clock.data.serverTime + performance.now() - clock.receivedAt : Date.now();
+    // `receivedAt` is when the shown answer left the server, which for a kept copy is long before this page opened.
+    const now = clock ? clock.data.serverTime + Date.now() - clock.receivedAt : Date.now();
     const timingItems: Item[] = activeDetail ? [activeDetail.item] : id ? [] : activeCatalog?.items || [];
     let nextDeadline = Infinity;
     for (const item of timingItems) {
@@ -136,7 +135,7 @@ export default function Workspace() {
     }
     useEffect(() => {
         if (!clock || !Number.isFinite(nextDeadline)) return;
-        const remaining = nextDeadline - clock.data.serverTime - performance.now() + clock.receivedAt;
+        const remaining = nextDeadline - clock.data.serverTime - Date.now() + clock.receivedAt;
         const timeout = setTimeout(() => tick(value => value + 1), Math.min(2_147_483_647, Math.ceil(remaining)));
         return () => clearTimeout(timeout);
     }, [clock, nextDeadline, clockTick]);
@@ -150,9 +149,9 @@ export default function Workspace() {
     useEffect(() => {
         if (!needsCatalog) return;
         const controller = new AbortController();
-        api<Catalog>('/collections', undefined, { signal: controller.signal }).then(data => {
-            if (!controller.signal.aborted) { setCatalog({ version, data, receivedAt: performance.now() }); setFailure(previous => previous?.id === '' ? undefined : previous); }
-        }).catch(error => { if (!controller.signal.aborted) setFailure({ id: '', message: errorText(error), status: error instanceof PlatformError ? error.status : undefined }); });
+        read<Catalog>('/collections', (data, receivedAt) => {
+            setCatalog({ version, data, receivedAt }); setFailure(previous => previous?.id === '' ? undefined : previous);
+        }, controller.signal).catch(error => { if (!controller.signal.aborted) setFailure({ id: '', message: errorText(error), status: error instanceof PlatformError ? error.status : undefined }); });
         return () => controller.abort();
     }, [needsCatalog, version]);
     useEffect(() => {
@@ -166,9 +165,9 @@ export default function Workspace() {
             if (requestedRound) requestOptions.set('round', requestedRound);
         }
         const path = itemRoute(id) + (requestOptions.size ? `?${requestOptions}` : '');
-        api<Detail>(path, undefined, { signal: controller.signal }).then(data => {
-            if (!controller.signal.aborted) { setDetail({ id, data, receivedAt: performance.now() }); setFailure(previous => previous?.id === id ? undefined : previous); }
-        }).catch(error => { if (!controller.signal.aborted) setFailure({ id, message: errorText(error), status: error instanceof PlatformError ? error.status : undefined }); });
+        read<Detail>(path, (data, receivedAt) => {
+            setDetail({ id, data, receivedAt }); setFailure(previous => previous?.id === id ? undefined : previous);
+        }, controller.signal).catch(error => { if (!controller.signal.aborted) setFailure({ id, message: errorText(error), status: error instanceof PlatformError ? error.status : undefined }); });
         return () => controller.abort();
     }, [id, version]);
     useEffect(() => {

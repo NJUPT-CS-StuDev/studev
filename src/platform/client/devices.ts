@@ -1,4 +1,4 @@
-import { api, button, el, errorText, formatTime, message, q } from './api';
+import { api, button, read, el, errorText, formatTime, message, q } from './api';
 interface Device { id: string; deviceName: string; createdAt: string; expiresAt: number; kind: 'cookie' | 'bearer'; current: boolean }
 const root = q('[data-account-devices]'), status = q('[data-devices-status]');
 let request: Promise<void> | null = null;
@@ -28,7 +28,7 @@ function refresh(force = false): Promise<void> {
   const control = q<HTMLButtonElement>('[data-devices-refresh]');
   control.disabled = true;
   message(status, loaded ? '正在刷新设备…' : '正在读取登录设备…');
-  request = api<{ items: Device[] }>('/auth/devices').then(result => {
+  request = read<{ items: Device[] }>('/auth/devices', result => {
     render(result.items); loaded = true; message(status);
   }).catch(error => { message(status, errorText(error), 'error'); }).finally(() => {
     request = null; control.disabled = false;

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, errorText, PlatformError } from '../api';
+import { errorText, PlatformError, read } from '../api';
 import { badge } from './Submission';
 import type { ProgressCounts, ProgressGroup, RoundProgress } from './model';
 
@@ -30,10 +30,8 @@ export function ParticipantProgress({ path, selected, version }: { path: string;
     const [attempt, retry] = useState(0);
     useEffect(() => {
         const controller = new AbortController();
-        api<{ progress: RoundProgress }>(path + '/submissions', undefined, { signal: controller.signal })
-            .then(result => {
-                if (!controller.signal.aborted) { setProgress(result.progress); setError(''); }
-            }).catch(failure => {
+        read<{ progress: RoundProgress }>(path + '/submissions', result => { setProgress(result.progress); setError(''); }, controller.signal)
+            .catch(failure => {
                 if (controller.signal.aborted) return;
                 const unavailable = failure instanceof PlatformError && [401, 403, 404].includes(failure.status);
                 if (unavailable) setProgress(undefined);

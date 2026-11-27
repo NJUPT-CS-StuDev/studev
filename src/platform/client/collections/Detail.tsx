@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, CalendarClock, ClipboardList, Copy, Download, FileArchive, Pencil, Plus, Settings2, Trash2, Undo2, UsersRound } from 'lucide-react';
-import { api, errorText } from '../api';
+import { api, errorText, read } from '../api';
 import { collectionProgress, pinnedCollections, semesterLabel } from '../../collections.mjs';
 import ExportDialog from './ExportDialog';
 import './Board.css';
@@ -50,9 +50,7 @@ function RoundBoard({ detail, round, version, authorize, refresh }: {
             return;
         }
         const controller = new AbortController();
-        api<RoundBoardData>(`${path}/submissions`, undefined, { signal: controller.signal }).then(result => {
-            if (!controller.signal.aborted) { setResults(result); setLoadError(''); }
-        }).catch(error => {
+        read<RoundBoardData>(`${path}/submissions`, result => { setResults(result); setLoadError(''); }, controller.signal).catch(error => {
             if (!controller.signal.aborted) setLoadError(errorText(error));
         });
         return () => controller.abort();
@@ -142,8 +140,7 @@ function RoundBoard({ detail, round, version, authorize, refresh }: {
     useEffect(() => {
         if (!opened) return;
         const controller = new AbortController();
-        api<{ submission: Submission }>(submissionRoute(opened), undefined, { signal: controller.signal })
-            .then(result => { if (!controller.signal.aborted) { setCurrent(result.submission); setViewError(''); } })
+        read<{ submission: Submission }>(submissionRoute(opened), result => { setCurrent(result.submission); setViewError(''); }, controller.signal)
             .catch(error => { if (!controller.signal.aborted) setViewError(errorText(error)); });
         return () => controller.abort();
     }, [opened, viewAttempt, version]);

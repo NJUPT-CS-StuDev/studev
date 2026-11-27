@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
-import { api, errorText } from '../api';
+import { api, errorText, read } from '../api';
 import { attachmentNameTokens, pinnedCollections, semesterLabel } from '../../collections.mjs';
 import { DATA_RELEASE } from '@/world/config';
 import { loadCalendar, type CalendarTerm } from '@/world/data';
@@ -38,9 +38,9 @@ function RecipientPicker({ selected, onChange, organizationId, issuerId, onOrgan
     const [name, setName] = useState('');
     const [page, setPage] = useState(1);
     useEffect(() => {
-        let current = true;
-        api<Directory>('/collections/people').then(value => { if (current) setDirectory(value); }).catch(error => { if (current) setFailure(errorText(error)); });
-        return () => { current = false; };
+        const controller = new AbortController();
+        read<Directory>('/collections/people', setDirectory, controller.signal).catch(error => { if (!controller.signal.aborted) setFailure(errorText(error)); });
+        return () => controller.abort();
     }, [attempt]);
     const organizations = new Map(directory?.organizations.map(org => [org.id, org]));
     const belongs = (id: string, parent: string) => {

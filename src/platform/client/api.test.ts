@@ -104,3 +104,129 @@ describe('account request renewal', () => {
         expect(fetch).toHaveBeenCalledTimes(2);
     });
 });
+
+describe('reads shown from this device copy', () => {
+    let values: Map<string, string>;
+    const load = async () => { vi.resetModules(); return import('./api'); };
+    const later = () => { let release!: (response: Response) => void; return { promise: new Promise<Response>(resolve => { release = resolve; }), release: (body: unknown, status = 200) => release(Response.json(body, { status })) }; };
+    beforeEach(() => {
+        values = new Map([['studev_session_generation', 'signed-in'], ['studev_auth_user', JSON.stringify({ id: 'u1', nickname: 'n' })]]);
+        vi.stubGlobal('localStorage', { getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => values.set(key, value), removeItem: (key: string) => values.delete(key) });
+        vi.stubGlobal('navigator', { userAgent: 'Windows', locks: { request: async (_name: string, run: () => unknown) => run() } });
+        vi.stubGlobal('location', { pathname: '/forms/', search: '', reload: vi.fn(), replace: vi.fn() });
+    });
+    afterEach(() => vi.unstubAllGlobals());
+
+    it('shows the copy at once and the server answer only when it differs', async () => {
+        const { read } = await load();
+        const shown: unknown[] = [];
+        vi.stubGlobal('fetch', vi.fn(async () => Response.json({ items: [1] })));
+        await read('/collections/mine', data => shown.push(data));
+        const pending = later();
+        vi.stubGlobal('fetch', vi.fn(() => pending.promise));
+        await read('/collections/mine', data => shown.push(data));
+        expect(shown).toEqual([{ items: [1] }, { items: [1] }]);
+        pending.release({ items: [1, 2] });
+        await vi.waitFor(() => expect(shown).toHaveLength(3));
+        expect(shown[2]).toEqual({ items: [1, 2] });
+    });
+
+    it('drops every copy after a write, so the next read waits for the server', async () => {
+        const { api, read } = await load();
+        vi.stubGlobal('fetch', vi.fn(async () => Response.json({ items: [1] })));
+        await read('/collections/mine', () => undefined);
+        await api('/collections/items/x/submissions', { answer: 1 });
+        const pending = later();
+        vi.stubGlobal('fetch', vi.fn(() => pending.promise));
+        const shown: unknown[] = [];
+        const done = read('/collections/mine', data => shown.push(data));
+        await Promise.resolve();
+        expect(shown).toEqual([]);
+        pending.release({ items: [2] });
+        await done;
+        expect(shown).toEqual([{ items: [2] }]);
+    });
+
+    it('keeps the copy across a ticket renewal and campus sync', async () => {
+        const { api, read } = await load();
+        vi.stubGlobal('fetch', vi.fn(async () => Response.json({ items: [1] })));
+        await read('/collections/mine', () => undefined);
+        await api('/sync', { tasks: [] });
+        vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(() => undefined)));
+        const shown: unknown[] = [];
+        await read('/collections/mine', data => shown.push(data));
+        expect(shown).toEqual([{ items: [1] }]);
+    });
+
+    it('keeps an answer that began before a write out of the copy', async () => {
+        const { api, read } = await load();
+        const pending = later();
+        vi.stubGlobal('fetch', vi.fn(() => pending.promise));
+        const first = read('/collections/mine', () => undefined);
+        await Promise.resolve();
+        vi.stubGlobal('fetch', vi.fn(async () => Response.json({ ok: true })));
+        await api('/collections/items/x/submissions', { answer: 1 });
+        pending.release({ items: ['before the write'] });
+        await first;
+        vi.stubGlobal('fetch', vi.fn(async () => Response.json({ items: ['after'] })));
+        const shown: unknown[] = [];
+        await read('/collections/mine', data => shown.push(data));
+        expect(shown).toEqual([{ items: ['after'] }]);
+    });
+
+    it('drops the copy and reloads when the server no longer lets it be read', async () => {
+        const { read } = await load();
+        vi.stubGlobal('fetch', vi.fn(async () => Response.json({ items: [1] })));
+        await read('/collections/mine', () => undefined);
+        vi.stubGlobal('fetch', vi.fn(async () => Response.json({ error: { code: 'FORBIDDEN' } }, { status: 403 })));
+        await read('/collections/mine', () => undefined);
+        await vi.waitFor(() => expect(location.reload).toHaveBeenCalledTimes(1));
+        const pending = later();
+        vi.stubGlobal('fetch', vi.fn(() => pending.promise));
+        const shown: unknown[] = [];
+        void read('/collections/mine', data => shown.push(data));
+        await Promise.resolve();
+        expect(shown).toEqual([]);
+    });
+
+    it('keeps the copy offline', async () => {
+        const { read } = await load();
+        vi.stubGlobal('fetch', vi.fn(async () => Response.json({ items: [1] })));
+        await read('/collections/mine', () => undefined);
+        vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('offline'); }));
+        await read('/collections/mine', () => undefined);
+        await new Promise(resolve => setTimeout(resolve, 0));
+        expect(location.reload).not.toHaveBeenCalled();
+    });
+
+    it('keeps copies of different accounts apart', async () => {
+        const { read } = await load();
+        vi.stubGlobal('fetch', vi.fn(async () => Response.json({ items: ['u1'] })));
+        await read('/collections/mine', () => undefined);
+        values.set('studev_auth_user', JSON.stringify({ id: 'u2', nickname: 'm' }));
+        const pending = later();
+        vi.stubGlobal('fetch', vi.fn(() => pending.promise));
+        const shown: unknown[] = [];
+        void read('/collections/mine', data => shown.push(data));
+        await Promise.resolve();
+        expect(shown).toEqual([]);
+    });
+
+    it('gives the session at once and reloads only when the server changes what the page may show', async () => {
+        const { session } = await load();
+        const user = { id: 'u1', role: 'user', status: 'active' };
+        vi.stubGlobal('fetch', vi.fn(async () => Response.json({ user, csrfToken: 'c', mfaVerified: false })));
+        await session();
+        const pending = later();
+        vi.stubGlobal('fetch', vi.fn(() => pending.promise));
+        await expect(session()).resolves.toMatchObject({ user: { id: 'u1' } });
+        pending.release({ user: { ...user, nickname: 'renamed' }, csrfToken: 'c', mfaVerified: false });
+        await new Promise(resolve => setTimeout(resolve, 0));
+        expect(location.reload).not.toHaveBeenCalled();
+        const revoked = later();
+        vi.stubGlobal('fetch', vi.fn(() => revoked.promise));
+        await expect(session()).resolves.toMatchObject({ user: { id: 'u1' } });
+        revoked.release({ user: { ...user, role: 'admin' }, csrfToken: 'c', mfaVerified: false });
+        await vi.waitFor(() => expect(location.reload).toHaveBeenCalledTimes(1));
+    });
+});
