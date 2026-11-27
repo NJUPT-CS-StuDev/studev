@@ -81,7 +81,9 @@ export function createSessions({ repo, now, loadUser, secret }) {
     const refreshToken = randomBytes(32).toString('base64url');
     const started = now();
     if (!(session.expiresAt > started)) fail(401, 'TOKEN_INVALID', '登录已失效，请重新登录。');
-    const expiresAt = Math.min(started + ACCESS_SECONDS * 1000, session.expiresAt);
+    // A web cookie carries the refresh credential beside the access one, so a short access life protects nothing there;
+    // it lasts the idle window. An app's access token travels alone and stays short. Every request checks revocation.
+    const expiresAt = session.kind === 'cookie' ? session.expiresAt : Math.min(started + ACCESS_SECONDS * 1000, session.expiresAt);
     const accessToken = seal({ s: session.id, u: session.userId, x: expiresAt, e: session.expiresAt, r: [session.revision ?? 0, generation, user.revision] });
     await repo.putNew(tokenKey('refresh', refreshToken), { sessionId: session.id, userId: session.userId, expiresAt: session.expiresAt });
     return { tokenType: 'Bearer', accessToken, refreshToken, expiresIn: Math.max(0, Math.floor((expiresAt - now()) / 1000)), refreshExpiresAt: session.expiresAt, deviceSessionId: session.id };

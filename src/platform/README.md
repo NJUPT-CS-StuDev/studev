@@ -58,7 +58,10 @@ owner, deadline and the revisions of the session state, login head and account i
 was issued against. Each request reads those authoritative records in one round of
 simple reads: a revision n is proven latest by n + 1 being absent (revisions are
 reserved densely), and only a newer revision falls back to a listing. Revocation
-stays immediate. Access expires in at most 600 seconds. Foreground use renews the 30-day idle
+stays immediate. An app's access token expires in at most 600 seconds; a web
+credential lasts its session's idle window, since its cookie carries the refresh
+credential beside it anyway, and the first request of a page in use renews that
+window at most once a day. Foreground use renews the 30-day idle
 window on credential rotation, up to 180 days from the sign-in for ordinary
 accounts and 90 days for administrators and owners. Existing valid sessions
 adopt this policy on their next foreground refresh. Rotation spends one atomic

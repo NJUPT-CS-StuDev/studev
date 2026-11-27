@@ -201,6 +201,12 @@ async function platformStartup(path: string, generation: string | null, credenti
 
 let refreshRequest: Promise<void> | null = null;
 const foregroundRenewal = 'studev_session_foreground_renewal';
+const renewedAt = 'studev_session_renewed_at';
+/**
+ * A web credential lasts as long as its session's idle window, so no read waits for a rotation. Using the site moves
+ * that window forward: the first request of a page in use, at most once a day, renews it before going.
+ */
+const renewalDue = () => Boolean(localStorage.getItem(foregroundRenewal)) || !(Date.now() - Number(localStorage.getItem(renewedAt)) < 86_400_000);
 const pageInUse = () => typeof document === 'undefined' || (document.visibilityState === 'visible' && document.hasFocus());
 async function refreshCookieSession(generation: string | null, foreground: boolean) {
     refreshRequest ||= navigator.locks.request('studev-session-refresh', async () => {
@@ -218,7 +224,7 @@ async function refreshCookieSession(generation: string | null, foreground: boole
         const nextGeneration = crypto.randomUUID();
         localStorage.setItem('studev_session_generation', nextGeneration);
         if (collectionProof?.generation === generation) collectionProof = { generation: nextGeneration, csrfToken: renewed.csrfToken };
-        if (extend) localStorage.removeItem(foregroundRenewal);
+        if (extend) { localStorage.removeItem(foregroundRenewal); localStorage.setItem(renewedAt, String(Date.now())); }
         else localStorage.setItem(foregroundRenewal, '1');
     }).finally(() => { refreshRequest = null; });
     return refreshRequest;
@@ -243,7 +249,7 @@ export async function api<T>(path: string, body?: unknown, options: RequestInit 
         });
     }
     generation = credentials === 'omit' ? null : localStorage.getItem('studev_session_generation');
-    if (retry && sessionRequest && generation && foreground && localStorage.getItem(foregroundRenewal)) {
+    if (retry && sessionRequest && generation && foreground && renewalDue()) {
         try { await refreshCookieSession(generation, true); }
         catch (error) {
             if (publicCollectionRead && error instanceof PlatformError && error.status === 401) return api<T>(path, body, { ...options, credentials: 'omit' }, false);
@@ -293,8 +299,8 @@ if (path === '/auth/login' || path === '/auth/logout') {
     collectionProof = undefined;
     localStorage.removeItem('studev_session_refresh_pending');
     localStorage.removeItem(foregroundRenewal);
-    if (path === '/auth/login') localStorage.setItem('studev_session_generation', crypto.randomUUID());
-    else localStorage.removeItem('studev_session_generation');
+    if (path === '/auth/login') { localStorage.setItem('studev_session_generation', crypto.randomUUID()); localStorage.setItem(renewedAt, String(Date.now())); }
+    else { localStorage.removeItem('studev_session_generation'); localStorage.removeItem(renewedAt); }
 }
 return data as T; }
 /**
@@ -386,7 +392,7 @@ export async function session(required = false, staff = false): Promise<Session 
 export async function requestSession(): Promise<Session | null> {
     if (requestProof && performance.now() < requestProof.until &&
         localStorage.getItem('studev_session_generation') === requestProof.generation &&
-        !localStorage.getItem('studev_session_refresh_pending') && !localStorage.getItem(foregroundRenewal)) {
+        !localStorage.getItem('studev_session_refresh_pending') && !renewalDue()) {
         return sessionForPage(false, false);
     }
     await confirmedSession();

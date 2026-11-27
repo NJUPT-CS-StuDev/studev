@@ -57,8 +57,9 @@ test('cookie refresh rotates once, shares absolute expiry, rejects replay and ne
   const native = await f.appLogin();
   const oldCookies = f.browser.cookie;
   f.advance(600_001);
-  const expiredWeb = await f.browser.call('/auth/session'), expiredApp = await f.app('/auth/session', undefined, native.body.accessToken);
-  assert.equal(expiredWeb.status, 401); assert.deepEqual(expiredWeb.body, expiredApp.body);
+  // The web credential lasts its idle window (its cookie already carries the refresh credential); an app's stays short.
+  const web = await f.browser.call('/auth/session'), expiredApp = await f.app('/auth/session', undefined, native.body.accessToken);
+  assert.equal(web.status, 200); assert.equal(expiredApp.status, 401);
   const refreshed = await f.browser.call('/auth/refresh', { method: 'POST', body: {} });
   assert.equal(refreshed.status, 200); assert.equal(refreshed.body.accessToken, undefined); assert.equal(refreshed.body.refreshToken, undefined);
   assert.equal((await f.browser.call('/auth/session')).status, 200);

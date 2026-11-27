@@ -47,7 +47,7 @@ test('web credentials survive EdgeOne header serialization as one cookie', async
   assert.equal((await call('/auth/session')).status, 200);
 
   clock += 600_001;
-  assert.equal((await call('/auth/session')).status, 401);
+  assert.equal((await call('/auth/session')).status, 200, 'a web credential lasts its idle window');
   const refreshed = await call('/auth/refresh', { method: 'POST', body: {} });
   assert.equal(refreshed.status, 200);
   assert.equal(refreshed.headers.getSetCookie().length, 1);

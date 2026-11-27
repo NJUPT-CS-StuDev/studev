@@ -42,7 +42,7 @@ test('native tokens are opaque, hashed, device-bound, short-lived; cookie login 
   assert.equal((await f.call('/auth/session', undefined, accessToken)).status, 401);
   const refreshed = await f.call('/auth/refresh', { refreshToken, deviceId });
   assert.equal(refreshed.status, 200); assert.notEqual(refreshed.body.refreshToken, refreshToken);
-  assert.equal((await f.browser.call('/auth/session')).status, 401);
+  assert.equal((await f.browser.call('/auth/session')).status, 200, 'the web credential lasts its idle window');
   assert.equal((await f.browser.call('/auth/refresh', { method: 'POST', body: {} })).status, 200);
   assert.equal((await f.browser.call('/auth/session')).status, 200);
   assert.equal((await f.call('/auth/refresh', { refreshToken, deviceId })).body.error.code, 'REFRESH_REPLAYED');

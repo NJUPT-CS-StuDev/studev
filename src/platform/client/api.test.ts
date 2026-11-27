@@ -3,7 +3,7 @@ import { api, requestSession } from './api';
 
 describe('account request renewal', () => {
     beforeEach(() => {
-        const values = new Map<string, string>([['studev_session_generation', 'signed-in']]);
+        const values = new Map<string, string>([['studev_session_generation', 'signed-in'], ['studev_session_renewed_at', String(Date.now())]]);
         vi.stubGlobal('localStorage', {
             getItem: (key: string) => values.get(key) ?? null,
             setItem: (key: string, value: string) => values.set(key, value),
@@ -79,6 +79,16 @@ describe('account request renewal', () => {
         ]);
     });
 
+    it('renews a day-old idle window once before the first request of a page in use', async () => {
+        localStorage.setItem('studev_session_renewed_at', String(Date.now() - 86_400_001));
+        const fetch = vi.fn().mockResolvedValueOnce(Response.json({ csrfToken: 'renewed' })).mockImplementation(async () => Response.json({ items: [] }));
+        vi.stubGlobal('fetch', fetch);
+        await expect(api('/auth/devices')).resolves.toEqual({ items: [] });
+        await expect(api('/auth/devices')).resolves.toEqual({ items: [] });
+        expect(fetch.mock.calls.map(call => call[0])).toEqual(['/api/platform/auth/refresh', '/api/platform/auth/devices', '/api/platform/auth/devices']);
+        expect(JSON.parse(fetch.mock.calls[0]?.[1]?.body ?? '{}')).toMatchObject({ foreground: true });
+    });
+
     it('does not loop when the renewed session is refused', async () => {
         const expired = () => Response.json({ error: { code: 'TOKEN_INVALID' } }, { status: 401 });
         const fetch = vi.fn().mockResolvedValueOnce(expired()).mockResolvedValueOnce(Response.json({ ok: true })).mockResolvedValueOnce(expired());
@@ -110,7 +120,7 @@ describe('reads shown from this device copy', () => {
     const load = async () => { vi.resetModules(); return import('./api'); };
     const later = () => { let release!: (response: Response) => void; return { promise: new Promise<Response>(resolve => { release = resolve; }), release: (body: unknown, status = 200) => release(Response.json(body, { status })) }; };
     beforeEach(() => {
-        values = new Map([['studev_session_generation', 'signed-in'], ['studev_auth_user', JSON.stringify({ id: 'u1', nickname: 'n' })]]);
+        values = new Map([['studev_session_generation', 'signed-in'], ['studev_session_renewed_at', String(Date.now())], ['studev_auth_user', JSON.stringify({ id: 'u1', nickname: 'n' })]]);
         vi.stubGlobal('localStorage', { getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => values.set(key, value), removeItem: (key: string) => values.delete(key) });
         vi.stubGlobal('navigator', { userAgent: 'Windows', locks: { request: async (_name: string, run: () => unknown) => run() } });
         vi.stubGlobal('location', { pathname: '/forms/', search: '', reload: vi.fn(), replace: vi.fn() });
