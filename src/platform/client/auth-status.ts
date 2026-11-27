@@ -1,4 +1,4 @@
-import { api, PlatformError, type Session } from './api';
+import { confirmedSession } from './api';
 
 const CACHE_KEY = 'studev_auth_user';
 
@@ -53,30 +53,7 @@ window.addEventListener('studev:account', () => {
 // 只有处于登录缓存且超过静默缓存周期、且不在由 platform-client 接管会话的平台功能页时，才在后台静默校准会话；
 // 未登录普通访客绝对不触发无意义的 /api/platform/auth/session 请求，消灭 401 网络瀑布與重复请求
 const isPlatformManagedPage = /^\/(?:account|forms)(?:\/|$)/.test(location.pathname);
-if (hasCachedUser && shouldVerify && !isPlatformManagedPage) {
-  void (async () => {
-    try {
-      const data = await api<Session>('/auth/session');
-      if (data?.user) {
-        try {
-          localStorage.setItem(CACHE_KEY, JSON.stringify({
-            id: data.user.id,
-            nickname: data.user.nickname,
-            role: data.user.role || 'user',
-            qq: data.user.qq,
-            verifiedAt: Date.now()
-          }));
-        } catch {}
-        updateNavLinks(true);
-        window.dispatchEvent(new Event('studev:account'));
-      }
-    } catch (error) {
-      if (error instanceof PlatformError && error.status === 401) {
-        try { localStorage.removeItem(CACHE_KEY); } catch {}
-        updateNavLinks(false);
-        window.dispatchEvent(new Event('studev:account'));
-      }
-    }
-  })();
-}
+// The confirmation is shared with every other session read on this page, and updates the cached account (or clears it
+// on a refused session) and the nav links through `studev:account`.
+if (hasCachedUser && shouldVerify && !isPlatformManagedPage) void confirmedSession().catch(() => { /* Offline: the cached account stands. */ });
 }
