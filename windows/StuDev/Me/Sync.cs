@@ -16,6 +16,8 @@ public sealed class Sync
     private readonly DispatcherQueueTimer later;
     private bool running;
     private bool again;
+    // The revisions last received, which let the platform confirm an unchanged account in one round of reads.
+    private (string User, JsonNode Revisions)? known;
 
     public Sync(Campus campus, DispatcherQueue queue)
     {
@@ -43,8 +45,9 @@ public sealed class Sync
         {
             var sent = campus.Tasks.All.ToList();
             var mine = campus.Preferences.Snapshot();
-            var result = await Account.Shared.Request("/sync", new JsonObject { ["tasks"] = JsonSerializer.SerializeToNode(sent, StorageJson.Default.ListPersonalTask), ["settings"] = SettingsSync.PartsOf(mine) }, foreground: false);
+            var result = await Account.Shared.Request("/sync", new JsonObject { ["tasks"] = JsonSerializer.SerializeToNode(sent, StorageJson.Default.ListPersonalTask), ["settings"] = SettingsSync.PartsOf(mine), ["known"] = known is { } k && k.User == user.Id ? k.Revisions.DeepClone() : null }, foreground: false);
             if (Account.Shared.User?.Id != user.Id) return;
+            known = result["known"] is { } revisions ? (user.Id, revisions.DeepClone()) : null;
             campus.Tasks.Adopt(result["tasks"].Deserialize(StorageJson.Default.ListPersonalTask) ?? []);
             if (SettingsSync.Taken(campus.Preferences.Snapshot(), result["settings"] as JsonObject ?? []) is { } taken) campus.Preferences.Adopt(taken);
         }

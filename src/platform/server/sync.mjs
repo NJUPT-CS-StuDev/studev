@@ -33,7 +33,7 @@ export function syncedSettings(input) {
 
 /** The revisions a device last received, if it says. */
 export function syncedKnown(input) {
-  if (input === undefined) return {};
+  if (input === undefined || input === null) return {};
   const valid = (value) => value === undefined || (Number.isSafeInteger(value) && value >= 0 && value < 99999999);
   if (!input || typeof input !== 'object' || Array.isArray(input) || !valid(input.tasks) || !valid(input.settings)) fail(400, 'SYNC_INVALID', '同步版本无效。');
   return { tasks: input.tasks, settings: input.settings };

@@ -27,6 +27,8 @@ class Sync(private val store: TaskStore, private val settings: CampusSettings, p
     private var foreground = false
     private var syncedResume = -1L
     private var syncedUser: String? = null
+    /** The revisions last received, which let the platform confirm an unchanged account in one round of reads. */
+    private var known: Pair<String, JsonElement>? = null
     fun resume() { foreground = true; resumed.value++ }
     fun pause() { foreground = false }
     init {
@@ -42,8 +44,9 @@ class Sync(private val store: TaskStore, private val settings: CampusSettings, p
         try {
             val sent = store.all.value
             val mine = settings.state.value
-            val result = client.request("/sync", buildJsonObject { put("tasks", json.encodeToJsonElement(sent)); put("settings", partsOf(mine)) }, authenticated = true, foreground = foreground)
+            val result = client.request("/sync", buildJsonObject { put("tasks", json.encodeToJsonElement(sent)); put("settings", partsOf(mine)); known?.takeIf { it.first == user }?.let { put("known", it.second) } }, authenticated = true, foreground = foreground)
             if (client.presence.value.user?.id != user) return
+            known = result["known"]?.let { user to it }
             val theirs = json.decodeFromJsonElement<List<Task>>(result.getValue("tasks")).map(Tasks::sanitize)
             val now = store.all.value
             val merged = Tasks.merge(now, theirs)
