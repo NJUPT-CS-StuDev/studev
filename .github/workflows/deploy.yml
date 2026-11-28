@@ -10,9 +10,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: deploy
-
 jobs:
   distribution:
     runs-on: ubuntu-latest
@@ -34,10 +31,24 @@ jobs:
       - id: revision
         run: echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
-  deploy:
+  # EdgeOne counts every deployment against the account's monthly build minutes. Pushes settle for ten minutes first,
+  # and a newer push cancels the wait, so a run of commits deploys once.
+  settle:
     needs: distribution
     if: needs.distribution.outputs.ready == 'true'
     runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-settle
+      cancel-in-progress: true
+    steps:
+      - if: github.event_name == 'push'
+        run: sleep 600
+
+  deploy:
+    needs: [distribution, settle]
+    runs-on: ubuntu-latest
+    concurrency:
+      group: deploy
     env:
       PAGES_SOURCE: skills
       EDGEONE_API_TOKEN: ${{ secrets.EDGEONE_API_TOKEN }}
@@ -83,7 +94,14 @@ jobs:
       - run: npm run test:platform
       - run: npm run build
       - run: npm run test:site
+      # A build identical to the live site is not deployed again.
+      - id: identity
+        run: |
+          id=$(node scripts/release/deployment-id.mjs --write)
+          live=$(curl -fsS "$(node -p "require('./product.json').origin")/deployment.txt" || true)
+          if [ "$id" = "$live" ]; then echo "the live site is already $id"; echo "changed=false" >> "$GITHUB_OUTPUT"; else echo "changed=true" >> "$GITHUB_OUTPUT"; fi
       - name: Deploy
+        if: steps.identity.outputs.changed == 'true'
         run: |
           set -o pipefail
           # The EdgeOne API answers 522 now and then; a later try gets through.
