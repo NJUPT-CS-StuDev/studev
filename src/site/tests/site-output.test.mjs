@@ -221,7 +221,7 @@ test('robots and HTML advertise the formal sitemap', async () => {
 });
 
 test('error and all private platform pages stay outside search indexes', async () => {
-  const privatePages = new Set(['404.html', ...['login', 'signed-in', 'account', 'members', 'forms'].map((path) => `${path}/index.html`)].map((path) => join(output, path)));
+  const privatePages = new Set(['404.html', ...['login', 'signed-in', 'account', 'members', 'forms', 'moved'].map((path) => `${path}/index.html`)].map((path) => join(output, path)));
   for (const file of await pages(output)) {
     let robots;
     walk(parse(await readFile(file, 'utf8')), (node) => {
