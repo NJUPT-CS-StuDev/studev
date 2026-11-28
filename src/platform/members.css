@@ -55,7 +55,7 @@
 .p-record-footer { position:sticky; bottom:0; background:var(--paper); display:flex; align-items:center; justify-content:space-between; gap:10px; border-top:1px solid var(--line); padding-block:10px; margin-top:14px; }
 .p-record-footer .p-message { margin:0; padding:0; background:transparent; border:0; }
 .p-record-footer .p-button { margin-left:auto; }
-@media(max-width:999.98px) { .p-members-heading { margin-right:var(--size-account-base); } }
+@media(max-width:999.98px) { .p-members-heading { margin-right:calc(var(--size-header-actions) + 8px); } }
 @media(max-width:720px) {
     .p-modal.p-record { padding-inline:16px; }
     .p-record-row { grid-template-columns:minmax(4.3rem,5.5rem) minmax(0,1fr) auto; }

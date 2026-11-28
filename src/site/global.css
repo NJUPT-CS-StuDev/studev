@@ -90,6 +90,10 @@ body { padding-bottom: calc(50px + env(safe-area-inset-bottom, 0px)); }
   .header-actions { position: absolute; top: calc(6px + env(safe-area-inset-top, 0px)); right: 16px; z-index: 45; gap: 4px; }
   .header-actions .theme-entry, .header-actions .site-share-entry { width: 36px; height: 36px; min-width: 36px; min-height: 36px; padding: 0; border-radius: var(--radius-pill); }
   .header-actions .site-share-entry svg { transform: none; }
+  /* Three round buttons in the top-right corner, as on the campus pages; a heading beside them leaves this much room. */
+  .header-actions .avatar { width: 36px; height: 36px; min-width: 36px; padding: 4px; gap: 0; }
+  .header-actions .avatar-name { display: none; }
+  :root { --size-header-actions: calc(3 * 36px + 2 * 4px); }
   .campus-site-actions { display: none; }
   body:has(.mapview) .header-actions { display: none; }
 }
