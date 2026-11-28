@@ -23,7 +23,7 @@ test('web credentials survive EdgeOne header serialization as one cookie', async
       },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
-    const original = await handle({ request, env, clientIp: 'edgeone-cookie-test' });
+    const original = await handle({ request, env, eo: { clientIp: 'edgeone-cookie-test' } });
     const setCookies = original.headers.getSetCookie();
     assert.ok(setCookies.length <= 1, `${path} emitted ${setCookies.length} Set-Cookie headers`);
     // EdgeOne's onRequest wrapper currently reconstructs headers this way.

@@ -117,8 +117,10 @@ An inactive projection hides disabled/deleted accounts, and an older delayed
 publisher cannot replace a newer revision. Unchanged public fields need no new
 projection.
 
-Build `.server-build/platform.mjs` with `npm run build` and deploy the static
-output and function together.
+The API runs as an edge function: `npm run build` bundles `.server-build/edge.mjs`
+(Web APIs only) for `edge-functions/api/platform/`, and the one Node function,
+`/node/scrypt`, computes password hashes for it. Deploy the static output and
+both functions together.
 
 `POST /sync` takes `{ tasks, settings }` and returns both merged. Tasks are merged
 by id and modification time, including deletion markers. Settings contain only

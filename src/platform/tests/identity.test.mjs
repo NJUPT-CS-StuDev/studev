@@ -66,12 +66,22 @@ test('TOTP follows RFC 6238 SHA-1 vectors and rejects drift outside the window',
   assert.equal(matchedTotpCounter(secret, '123', 100 * 30000), null);
 });
 
-test('TOTP encryption binds both ciphertext integrity and immutable user ID', () => {
+test('TOTP encryption binds both ciphertext integrity and immutable user ID', async () => {
   const key = Buffer.alloc(32, 8).toString('base64');
-  const encrypted = encryptTotp('ABCDEFGHIJKLMNOPQRSTUVWXYZ234567', key, 'user-1');
-  assert.equal(decryptTotp(encrypted, key, 'user-1'), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567');
-  assert.throws(() => decryptTotp(encrypted, key, 'user-2'));
-  assert.throws(() => decryptTotp({ ...encrypted, data: Buffer.alloc(32).toString('base64') }, key, 'user-1'));
+  const encrypted = await encryptTotp('ABCDEFGHIJKLMNOPQRSTUVWXYZ234567', key, 'user-1');
+  assert.equal(await decryptTotp(encrypted, key, 'user-1'), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567');
+  await assert.rejects(decryptTotp(encrypted, key, 'user-2'));
+  await assert.rejects(decryptTotp({ ...encrypted, data: Buffer.alloc(32).toString('base64') }, key, 'user-1'));
+});
+
+test('TOTP records sealed by the earlier Node implementation still open', async () => {
+  const { createCipheriv } = await import('node:crypto');
+  const key = Buffer.alloc(32, 9), iv = Buffer.alloc(12, 3);
+  const cipher = createCipheriv('aes-256-gcm', key, iv);
+  cipher.setAAD(Buffer.from('studev-totp-v1:user-1'));
+  const data = Buffer.concat([cipher.update('ABCDEFGHIJKLMNOPQRSTUVWXYZ234567', 'utf8'), cipher.final()]);
+  const record = { version: 1, iv: iv.toString('base64'), data: data.toString('base64'), tag: cipher.getAuthTag().toString('base64') };
+  assert.equal(await decryptTotp(record, key.toString('base64'), 'user-1'), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567');
 });
 
 test('bootstrap is one-time, password change and staff enrollment restrict business access', async () => {

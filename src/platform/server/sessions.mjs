@@ -1,5 +1,4 @@
-import { createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
-import { digest } from './crypto.mjs';
+import { base64url, concat, digest, equalBytes, fromBase64, hmac, randomToken, randomUUID, utf8 } from './crypto.mjs';
 import { fail, text } from './common.mjs';
 import { isConflict } from './store.mjs';
 
@@ -29,16 +28,18 @@ export function createSessions({ repo, now, loadUser, secret }) {
   // login head and account it was issued against. Every request still reads
   // those authoritative records, so revocation stays immediate; the claim only
   // lets all of them be read at once, without a listing.
-  const mac = (body) => createHmac('sha256', secret).update('studev-access\0').update(body).digest();
+  const mac = (body) => hmac(secret, 'studev-access\0', body);
   function seal(claim) {
-    const body = Buffer.from(JSON.stringify(claim));
-    return Buffer.concat([body, mac(body)]).toString('base64url');
+    const body = utf8(JSON.stringify(claim));
+    return base64url(concat(body, mac(body)));
   }
   function unseal(token) {
     if (typeof token !== 'string' || !ACCESS.test(token)) return null;
-    const raw = Buffer.from(token, 'base64url'), body = raw.subarray(0, -32), tag = raw.subarray(-32);
-    if (tag.length !== 32 || !timingSafeEqual(tag, mac(body))) return null;
-    try { return JSON.parse(body.toString()); } catch { return null; }
+    let raw;
+    try { raw = fromBase64(token); } catch { return null; }
+    const body = raw.subarray(0, -32), tag = raw.subarray(-32);
+    if (tag.length !== 32 || !equalBytes(tag, mac(body))) return null;
+    try { return JSON.parse(new TextDecoder().decode(body)); } catch { return null; }
   }
   function device(value) {
     if (typeof value !== 'string' || !/^[A-Za-z0-9_-]{16,128}$/.test(value)) fail(400, 'INVALID_DEVICE', '设备标识无效，请重新安装后重试。');
@@ -78,7 +79,7 @@ export function createSessions({ repo, now, loadUser, secret }) {
   }
 
   async function issue(session, user, generation) {
-    const refreshToken = randomBytes(32).toString('base64url');
+    const refreshToken = randomToken();
     const started = now();
     if (!(session.expiresAt > started)) fail(401, 'TOKEN_INVALID', '登录已失效，请重新登录。');
     // A web cookie carries the refresh credential beside the access one, so a short access life protects nothing there;
@@ -110,7 +111,7 @@ export function createSessions({ repo, now, loadUser, secret }) {
     const generation = (tip?.generation ?? 0) + 1;
     const started = now();
     const session = { id: randomUUID(), loginGeneration: generation, userId: user.id, securityVersion: user.securityVersion, deviceHash, deviceName,
-      kind, csrfToken: randomBytes(32).toString('base64url'), mfaVerified, createdAt: new Date(started).toISOString(), expiresAt: started + IDLE_MS };
+      kind, csrfToken: randomToken(), mfaVerified, createdAt: new Date(started).toISOString(), expiresAt: started + IDLE_MS };
     // Publish metadata before the head so a following login on another device
     // can retain this family even while its credentials are still being issued.
     await repo.putNew(sessionKey(session.id), session);

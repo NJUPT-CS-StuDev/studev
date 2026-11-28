@@ -1,4 +1,4 @@
-import { createHash, createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
+import { base64url, digest as sha256Hex, hex, hmac, randomUUID, safeEqual } from '../crypto.mjs';
 import { archiveAttachmentName, deadlineReached, roundAcceptsSubmissions } from '../../collections.mjs';
 import { fail, readJson, text } from '../common.mjs';
 import { isConflict } from '../store.mjs';
@@ -110,13 +110,12 @@ function attachmentSelection(body, existing) {
 export function collectionSubmissions({ repo, env, now, getGateway, measure = (_name, run) => run() }) {
   const iso = () => new Date(now()).toISOString();
   const gateway = () => getGateway(oscaConfig(env));
-  const receiptTokenFor = (id) => createHmac('sha256', env.PLATFORM_SESSION_SECRET).update('collection receipt: ' + id).digest('base64url');
+  const receiptTokenFor = (id) => base64url(hmac(env.PLATFORM_SESSION_SECRET, 'collection receipt: ' + id));
 
   function attemptReceipt(attemptId, item, round, actor) {
     if (attemptId === undefined) return randomUUID();
     if (typeof attemptId !== 'string' || !submissionId.test(attemptId)) fail(400, 'INVALID_ATTEMPT_ID', '提交编号无效。');
-    const digest = createHmac('sha256', env.PLATFORM_SESSION_SECRET)
-      .update(JSON.stringify(['collection attempt', item.id, round.id, actor.id, attemptId])).digest('hex');
+    const digest = hex(hmac(env.PLATFORM_SESSION_SECRET, JSON.stringify(['collection attempt', item.id, round.id, actor.id, attemptId])));
     return [digest.slice(0, 8), digest.slice(8, 12), digest.slice(12, 16), digest.slice(16, 20), digest.slice(20, 32)].join('-');
   }
 
@@ -156,7 +155,7 @@ export function collectionSubmissions({ repo, env, now, getGateway, measure = (_
     const sid = studentId(actor.studentId);
     if (!/^[A-Z0-9]{4,24}$/.test(sid)) fail(403, 'IDENTITY_REQUIRED', '请先完成学号认证。');
     const receiptId = attemptReceipt(body.attemptId, item, round, actor);
-    const digest = createHash('sha256').update(JSON.stringify([body.answers, body.files, body.keepFiles])).digest('hex');
+    const digest = sha256Hex(JSON.stringify([body.answers, body.files, body.keepFiles]));
     const requestKey = keys.request(receiptId);
     const resume = (request) => {
       if (request.payloadDigest !== digest) fail(409, 'ATTEMPT_CHANGED', '此次提交的内容已改变，请重新提交。');
@@ -218,7 +217,7 @@ export function collectionSubmissions({ repo, env, now, getGateway, measure = (_
     const body = await readJson(context.request);
     const token = body.receiptToken;
     if (typeof token !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(token) ||
-        !timingSafeEqual(Buffer.from(token), Buffer.from(receiptTokenFor(id)))) {
+        !safeEqual(token, receiptTokenFor(id))) {
       fail(403, 'RECEIPT_REJECTED', '这次上传已经失效，请重新提交。');
     }
     const receipt = await repo.get(keys.request(id));

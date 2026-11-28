@@ -63,7 +63,7 @@ export function requestClient(handle, env) {
         method, headers: { ...(cookie ? { Cookie: cookie } : {}), ...(method === 'POST' ? { Origin: 'https://studev.test', 'X-CSRF-Token': csrf } : {}), ...(body === undefined ? {} : { 'Content-Type': 'application/json' }), ...headers },
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       });
-      const result = await handle({ request, env, clientIp: 'test-client' });
+      const result = await handle({ request, env, eo: { clientIp: 'test-client' } });
       for (const setCookie of result.headers.getSetCookie()) { const pair = setCookie.split(';')[0]; cookies.set(pair.split('=')[0], pair); }
       cookie = [...cookies.values()].join('; ');
       const value = raw ? await result.text() : await result.json(); if (value.csrfToken) csrf = value.csrfToken;

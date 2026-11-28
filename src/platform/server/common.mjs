@@ -17,28 +17,12 @@ response.stream = (body) => new Response(body, { headers: {
 export async function readJson(request, maxBytes = 65536) {
   if (!request.headers.get('content-type')?.toLowerCase().startsWith('application/json')) fail(415, 'JSON_REQUIRED', '请以 JSON 格式提交。');
   if (Number(request.headers.get('content-length')) > maxBytes) fail(413, 'BODY_TOO_LARGE', '提交信息过长。');
+  // The edge accepts at most 1 MB of request body, so reading it whole is bounded; the limit here is the endpoint's.
   let bytes;
-  const original = request._rawBodyBuffer;
-  if (Buffer.isBuffer(original) || original instanceof Uint8Array) {
-    if (original.byteLength > maxBytes) fail(413, 'BODY_TOO_LARGE', '提交信息过长。');
-    bytes = Buffer.from(original.buffer, original.byteOffset, original.byteLength);
-  } else {
-    const nativeGetter = Object.getOwnPropertyDescriptor(Request.prototype, 'body')?.get;
-    let stream;
-    try { stream = nativeGetter?.call(request); } catch { fail(400, 'INVALID_JSON', '缺少提交信息。'); }
-    const reader = stream?.getReader();
-    if (!reader) fail(400, 'INVALID_JSON', '缺少提交信息。');
-    const chunks = []; let size = 0;
-    while (true) {
-      const { done, value } = await reader.read(); if (done) break;
-      size += value.byteLength;
-      if (size > maxBytes) { await reader.cancel(); fail(413, 'BODY_TOO_LARGE', '提交信息过长。'); }
-      chunks.push(Buffer.from(value));
-    }
-    bytes = Buffer.concat(chunks);
-  }
+  try { bytes = new Uint8Array(await request.arrayBuffer()); } catch { fail(400, 'INVALID_JSON', '缺少提交信息。'); }
+  if (bytes.byteLength > maxBytes) fail(413, 'BODY_TOO_LARGE', '提交信息过长。');
   try {
-    const body = JSON.parse(bytes.toString('utf8'));
+    const body = JSON.parse(new TextDecoder().decode(bytes));
     if (!body || Array.isArray(body) || typeof body !== 'object') throw new Error();
     return body;
   } catch { fail(400, 'INVALID_JSON', '提交信息不是有效 JSON。'); }
@@ -62,6 +46,6 @@ export function text(value, label, max, required = false) {
 }
 export function safeLog(error) {
   const identifier = (v) => typeof v === 'string' && /^[A-Za-z0-9_.-]{1,64}$/.test(v) ? v : 'UNKNOWN';
-  const status = error?.$metadata?.httpStatusCode ?? error?.statusCode ?? error?.status;
+  const status = error?.status ?? error?.statusCode;
   console.error('platform-service-error', { name: identifier(error?.name), code: identifier(error?.code), ...(Number.isInteger(status) && status >= 100 && status <= 599 ? { status } : {}) });
 }

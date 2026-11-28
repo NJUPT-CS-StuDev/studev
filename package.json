@@ -31,8 +31,6 @@
     "@astrojs/markdown-remark": "^7.3.5",
     "@astrojs/react": "^7.1.2",
     "@astrojs/sitemap": "^3.7.4",
-    "@aws-sdk/client-s3": "^3.1161.0",
-    "@aws-sdk/s3-request-presigner": "^3.1161.0",
     "@edgeone/pages-blob": "^0.0.17",
     "@local-runtime-mcp/browser-extension": "https://github.com/hicancan/local-runtime-mcp/releases/download/v14.2.0/local-runtime-mcp-web-sdk-14.2.0.tgz",
     "@noble/hashes": "^2.4.0",

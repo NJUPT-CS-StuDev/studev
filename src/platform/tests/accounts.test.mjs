@@ -18,7 +18,7 @@ async function fixture() {
   assert.equal(login.status, 200);
   function registrationCredentials() { return { studentId: registration.studentId, password: registration.password }; }
   async function app(path, body, token) {
-    const result = await handle({ env: config.env, clientIp: 'accounts-test', request: new Request(config.env.PLATFORM_ORIGIN + '/api/platform' + path, {
+    const result = await handle({ env: config.env, eo: { clientIp: 'accounts-test' }, request: new Request(config.env.PLATFORM_ORIGIN + '/api/platform' + path, {
       method: body === undefined ? 'GET' : 'POST', headers: { ...(body === undefined ? {} : { 'Content-Type': 'application/json' }), ...(token ? { Authorization: 'Bearer ' + token } : {}) },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     }) });

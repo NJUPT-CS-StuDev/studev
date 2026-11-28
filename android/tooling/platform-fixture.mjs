@@ -15,7 +15,7 @@ const server = createServer(async (incoming, outgoing) => {
     if (!url.pathname.startsWith('/api/platform/')) { outgoing.writeHead(404); outgoing.end(); return; }
     const parts = []; let bytes = 0;
     for await (const part of incoming) { bytes += part.length; if (bytes > 65_536) { outgoing.writeHead(413); outgoing.end(); return; } parts.push(part); }
-    const response = await handle({ env, clientIp: 'loopback-acceptance', request: new Request(url, {
+    const response = await handle({ env, eo: { clientIp: 'loopback-acceptance' }, request: new Request(url, {
       method: incoming.method, headers: incoming.headers,
       ...(['GET', 'HEAD'].includes(incoming.method) ? {} : { body: Buffer.concat(parts) }),
     }) });

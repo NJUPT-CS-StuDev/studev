@@ -22,7 +22,7 @@ async function fixture() {
   async function call(path, body, token, headers = {}, method = body === undefined ? 'GET' : 'POST') {
     const response = await handle({ request: new Request('https://studev.test/api/platform' + path, { method,
       headers: { ...(body === undefined ? {} : { 'Content-Type': 'application/json' }), ...(token ? { Authorization: 'Bearer ' + token } : {}), ...headers },
-      ...(body === undefined ? {} : { body: JSON.stringify(body) }) }), env, clientIp: 'native-test' });
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }) }), env, eo: { clientIp: 'native-test' } });
     return { status: response.status, body: await response.json(), headers: response.headers };
   }
   const login = (extra = {}) => call('/auth/login', { studentId: 'TEST100002', password: config.password, deviceId, deviceName: '测试手机', ...extra });
@@ -152,7 +152,7 @@ test('web device list exposes only safe metadata and revocation is owner-only an
 test('TOTP and recovery verification, setup restrictions and account security invalidation apply to native login', async () => {
   const f = await fixture(), userKey = `identity/users/${f.user.id}`;
   const user = await f.repo.latest(userKey), secret = 'JBSWY3DPEHPK3PXP';
-  await f.repo.append(userKey, { ...user, totp: { encrypted: encryptTotp(secret, f.env.PLATFORM_ENCRYPTION_KEY, user.id), epoch: 'synthetic-epoch', recoveryHashes: [] } }, user.revision);
+  await f.repo.append(userKey, { ...user, totp: { encrypted: await encryptTotp(secret, f.env.PLATFORM_ENCRYPTION_KEY, user.id), epoch: 'synthetic-epoch', recoveryHashes: [] } }, user.revision);
   assert.equal((await f.login()).body.error.code, 'MFA_REQUIRED');
   assert.equal((await f.login({ totp: 'invalid' })).status, 401);
   const factor = totpCode(secret, Math.floor(f.now() / 30000));
@@ -198,7 +198,7 @@ test('native recovery codes remain single-use, setup gates mint no credentials, 
   assert.equal((await f.call('/auth/session', undefined, old.body.accessToken)).status, 401);
   assert.equal((await f.browser.call('/auth/devices')).body.items.length, 2);
   const secret = 'JBSWY3DPEHPK3PXP', recovery = 'TEST-RECOVERY-CODE';
-  const totp = { encrypted: encryptTotp(secret, f.env.PLATFORM_ENCRYPTION_KEY, user.id), epoch: 'recovery-test', recoveryHashes: [digest(`${user.id}:${recovery}`)] };
+  const totp = { encrypted: await encryptTotp(secret, f.env.PLATFORM_ENCRYPTION_KEY, user.id), epoch: 'recovery-test', recoveryHashes: [digest(`${user.id}:${recovery}`)] };
   const secured = await f.repo.append(key, { ...user, totp }, user.revision);
   assert.equal((await f.login({ totp: recovery })).status, 200);
   assert.equal((await f.login({ totp: recovery })).body.error.code, 'MFA_REPLAYED');

@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { randomUUID } from './crypto.mjs';
 import { fail, text } from './common.mjs';
 import {
   childrenOf,

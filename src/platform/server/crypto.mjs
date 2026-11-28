@@ -1,25 +1,69 @@
-import { createHash, randomBytes, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto';
-import { promisify } from 'node:util';
+// Cryptography the platform needs, in plain JavaScript and Web Crypto, so the same code runs on the edge and in Node.
+// Hashes and MACs are synchronous (they hash a few hundred bytes); only the password function is expensive, and it
+// comes from ./scrypt.mjs, which the edge build replaces with a call to the Node function that owns it.
+import { sha256 } from '@noble/hashes/sha2.js';
+import { sha1 } from '@noble/hashes/legacy.js';
+import { hmac as nobleHmac } from '@noble/hashes/hmac.js';
+import { bytesToHex, concatBytes, utf8ToBytes } from '@noble/hashes/utils.js';
+import { scrypt } from './scrypt.mjs';
 
-const scrypt = promisify(scryptCallback);
+export { bytesToHex as hex, concatBytes as concat, utf8ToBytes as utf8 };
 
+const bytes = (value) => typeof value === 'string' ? utf8ToBytes(value) : value;
+
+/** SHA-256 of the text of a value, as hex. */
 export function digest(value) {
-  return createHash('sha256').update(String(value)).digest('hex');
+  return bytesToHex(sha256(utf8ToBytes(String(value))));
 }
 
-export function safeEqual(left, right) {
-  const a = Buffer.from(String(left));
-  const b = Buffer.from(String(right));
-  return a.length === b.length && timingSafeEqual(a, b);
+/** HMAC of the parts (strings or bytes) in order. */
+export function hmac(key, ...parts) {
+  const mac = nobleHmac.create(sha256, bytes(key));
+  for (const part of parts) mac.update(bytes(part));
+  return mac.digest();
 }
+export const hmacSha1 = (key, message) => nobleHmac(sha1, bytes(key), bytes(message));
+
+export function randomBytes(length) {
+  return crypto.getRandomValues(new Uint8Array(length));
+}
+export const randomHex = (length) => bytesToHex(randomBytes(length));
+export const randomToken = (length = 32) => base64url(randomBytes(length));
+export const randomUUID = () => crypto.randomUUID();
+/** A uniform integer in [min, max). */
+export function randomInt(min, max) {
+  if (max === undefined) [min, max] = [0, min];
+  const range = max - min, limit = Math.floor(0x100000000 / range) * range, word = new Uint32Array(1);
+  do crypto.getRandomValues(word); while (word[0] >= limit);
+  return min + (word[0] % range);
+}
+
+export function base64(value) {
+  let binary = '';
+  for (const byte of value) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
+export const base64url = (value) => base64(value).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+export function fromBase64(text) {
+  const binary = atob(text.replace(/-/g, '+').replace(/_/g, '/'));
+  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+}
+
+/** Compares in time that depends only on the lengths. */
+export function equalBytes(a, b) {
+  if (a.length !== b.length) return false;
+  let difference = 0;
+  for (let i = 0; i < a.length; i++) difference |= a[i] ^ b[i];
+  return difference === 0;
+}
+export const safeEqual = (left, right) => equalBytes(utf8ToBytes(String(left)), utf8ToBytes(String(right)));
 
 // Provisioning helper. Never call this with a password taken from a public request.
-export async function hashPassword(password, salt = randomBytes(16).toString('hex')) {
+export async function hashPassword(password, salt = randomHex(16)) {
   if (typeof password !== 'string' || password.length < 6 || password.length > 256) {
     throw new Error('Use a password containing 6–256 characters.');
   }
-  const result = await scrypt(password, salt, 32, { N: 16384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 });
-  return `scrypt$16384$8$1$${salt}$${Buffer.from(result).toString('hex')}`;
+  return `scrypt$16384$8$1$${salt}$${await scrypt(password, salt)}`;
 }
 
 export function validPasswordHash(value) {
@@ -29,7 +73,5 @@ export function validPasswordHash(value) {
 export async function verifyPassword(password, encoded) {
   if (typeof password !== 'string' || password.length < 1 || password.length > 256 || !validPasswordHash(encoded)) return false;
   const [, , , , salt, expected] = encoded.split('$');
-  const actual = await scrypt(password, salt, 32, { N: 16384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 });
-  return safeEqual(Buffer.from(actual).toString('hex'), expected);
+  return safeEqual(await scrypt(password, salt), expected);
 }
-

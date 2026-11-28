@@ -1,5 +1,4 @@
-import { randomBytes, randomUUID } from 'node:crypto';
-import { digest, hashPassword, safeEqual, validPasswordHash, verifyPassword } from './crypto.mjs';
+import { digest, hashPassword, randomHex, randomToken, randomUUID, safeEqual, validPasswordHash, verifyPassword } from './crypto.mjs';
 import { fail, platformOrigin, readJson, requireOrigin, response, text } from './common.mjs';
 import { isConflict } from './store.mjs';
 import { createSessions, hasAuthorization, bearerBootstrap } from './sessions.mjs';
@@ -17,7 +16,7 @@ const QQ = /^[1-9]\d{4,11}$/;
 const userKey = (id) => `identity/users/${id}`;
 const staffRole = (role) => role === 'admin' || role === 'owner';
 const iso = (now) => new Date(now()).toISOString();
-const secretToken = () => randomBytes(32).toString('base64url');
+const secretToken = () => randomToken();
 
 export function normalizeStudentId(value) {
   if (typeof value !== 'string') fail(400, 'INVALID_STUDENT_ID', '请填写 6–20 位字母或数字学号。');
@@ -46,8 +45,9 @@ function qqValue(value) {
   return value;
 }
 function clientId(context) {
-  // Only trust the platform-supplied connection address, never caller-controlled headers.
-  return typeof context.clientIp === 'string' && context.clientIp.length <= 100 ? context.clientIp : 'unknown';
+  // Only trust the connection address the edge supplies, never caller-controlled headers.
+  const address = context.eo?.clientIp;
+  return typeof address === 'string' && address.length <= 100 ? address : 'unknown';
 }
 function cookieValue(request, name) {
   const cookies = String(request.headers.get('cookie') || '').split(';').map((v) => v.trim());
@@ -191,9 +191,10 @@ export function createIdentity({ repo, env, now = Date.now, academicYear, mailer
     const [data, organizations] = await Promise.all([read(), entry ? loadOrganizations(repo) : null]);
     return response(entry ? { ...data, session: { user: publicUser(auth.user, organizations), csrfToken: auth.csrfToken, ...setup } } : data);
   }
-  async function sessionResponse(user, body, kind, verified) {
+  // `verified` settles once every factor checked in parallel with the session reads has passed; nothing is written before.
+  async function sessionResponse(user, body, kind, verified, mfaVerified = Boolean(verified)) {
     const [started, orgs] = await Promise.all([
-      sessions.start(user, body, { kind, mfaVerified: Boolean(verified), verified }), loadOrganizations(repo),
+      sessions.start(user, body, { kind, mfaVerified, verified }), loadOrganizations(repo),
       verified?.then(() => members.publish(user, user)) ?? members.publish(user, user),
     ]);
     return credentialResponse(started, { user: publicUser(user, orgs), ...setupStatus(user, started.session) });
@@ -292,7 +293,7 @@ export function createIdentity({ repo, env, now = Date.now, academicYear, mailer
     if (user.totp.recoveryHashes?.includes(recoveryHash)) {
       key = `identity/recovery-used/${user.id}/${user.totp.epoch}/${recoveryHash}.json`;
     } else {
-      const secret = decryptTotp(user.totp.encrypted, env.PLATFORM_ENCRYPTION_KEY, user.id);
+      const secret = await decryptTotp(user.totp.encrypted, env.PLATFORM_ENCRYPTION_KEY, user.id);
       const counter = matchedTotpCounter(secret, normalized, now());
       if (counter === null) fail(401, 'MFA_INVALID', '动态验证码或恢复码无效。');
       key = `identity/totp-used/${user.id}/${user.totp.epoch}/${counter}.json`;
@@ -526,10 +527,10 @@ export function createIdentity({ repo, env, now = Date.now, academicYear, mailer
       const kind = bearerBootstrap(request, path) ? 'bearer' : 'cookie';
       if (kind === 'cookie') requireOrigin(request, env);
       const body = await readJson(request, 8192);
-      await repo.throttle('login-client', clientId(context), 60, 60);
       if (body.qq !== undefined) fail(400, 'INVALID_STUDENT_ID', '请使用学号登录，QQ 仅作为联系方式。');
       const identifier = normalizeStudentId(body.studentId);
-      const [, user] = await Promise.all([
+      const [, , user] = await Promise.all([
+        repo.throttle('login-client', clientId(context), 60, 60),
         repo.throttle('login-account', identifier, 10, 60),
         (async () => {
           const index = await repo.get(studentKey(identifier));
@@ -542,10 +543,16 @@ export function createIdentity({ repo, env, now = Date.now, academicYear, mailer
           return owner?.id && ID.test(owner.id) ? repo.latest(userKey(owner.id)) : null;
         })(),
       ]);
-      const correct = await verifyPassword(body.password, user?.passwordHash || env.PLATFORM_OWNER_PASSWORD_HASH);
-      if (!correct || !user || user.studentId !== identifier || user.status !== 'active') fail(401, 'LOGIN_FAILED', '学号或密码不正确，或账号尚未激活/已停用。');
-      if (user.totp && !body.totp) fail(401, 'MFA_REQUIRED', '请填写认证器动态验证码或恢复码。');
-      return sessionResponse(user, body, kind, user.totp ? consumeFactor(user, body.totp) : null);
+      const password = verifyPassword(body.password, user?.passwordHash || env.PLATFORM_OWNER_PASSWORD_HASH);
+      const rejected = () => fail(401, 'LOGIN_FAILED', '学号或密码不正确，或账号尚未激活/已停用。');
+      if (!user || user.studentId !== identifier || user.status !== 'active') { await password; rejected(); }
+      // The password function runs while the session reads its device families; a factor is spent only after it passes.
+      const verified = password.then((correct) => {
+        if (!correct) rejected();
+        if (user.totp && !body.totp) fail(401, 'MFA_REQUIRED', '请填写认证器动态验证码或恢复码。');
+        return user.totp ? consumeFactor(user, body.totp) : undefined;
+      });
+      return sessionResponse(user, body, kind, verified, Boolean(user.totp));
     }
     if (method === 'GET' && route === '/auth/session') {
       const [auth, orgs] = await Promise.all([authenticate(request, { required: true, allowEnrollment: true }), loadOrganizations(repo)]);
@@ -646,7 +653,7 @@ export function createIdentity({ repo, env, now = Date.now, academicYear, mailer
       if (auth.user.totp) fail(409, 'TOTP_ALREADY_ENABLED', '认证器已绑定。');
       if (!await verifyPassword(body.password, auth.user.passwordHash)) fail(401, 'PASSWORD_INVALID', '当前密码不正确。');
       const secret = newTotpSecret();
-      const pendingTotp = { encrypted: encryptTotp(secret, env.PLATFORM_ENCRYPTION_KEY, auth.user.id), epoch: randomBytes(16).toString('hex'), expiresAt: now() + 10 * 60_000 };
+      const pendingTotp = { encrypted: await encryptTotp(secret, env.PLATFORM_ENCRYPTION_KEY, auth.user.id), epoch: randomHex(16), expiresAt: now() + 10 * 60_000 };
       await repo.append(authSessionKey(auth), { ...auth.session, pendingTotp }, auth.session.revision || 0);
       const label = encodeURIComponent(`StuDev:${auth.user.qq}`);
       return response({ secret, otpauthUrl: `otpauth://totp/${label}?secret=${secret}&issuer=StuDev&algorithm=SHA1&digits=6&period=30` });
@@ -657,10 +664,10 @@ export function createIdentity({ repo, env, now = Date.now, academicYear, mailer
       await repo.throttle('totp-confirm', auth.user.id, 8, 60);
       const pending = auth.session.pendingTotp;
       if (auth.user.totp || !pending || pending.expiresAt <= now()) fail(400, 'TOTP_SETUP_EXPIRED', '请重新开始认证器绑定。');
-      const secret = decryptTotp(pending.encrypted, env.PLATFORM_ENCRYPTION_KEY, auth.user.id);
+      const secret = await decryptTotp(pending.encrypted, env.PLATFORM_ENCRYPTION_KEY, auth.user.id);
       const counter = matchedTotpCounter(secret, body.code, now());
       if (counter === null) fail(401, 'MFA_INVALID', '动态验证码无效。');
-      const recoveryCodes = Array.from({ length: 10 }, () => randomBytes(10).toString('hex').toUpperCase().match(/.{1,5}/g).join('-'));
+      const recoveryCodes = Array.from({ length: 10 }, () => randomHex(10).toUpperCase().match(/.{1,5}/g).join('-'));
       const totp = { encrypted: pending.encrypted, epoch: pending.epoch, recoveryHashes: recoveryCodes.map((code) => digest(`${auth.user.id}:${code}`)), enrolledAt: iso(now) };
       // Both atomic writes are deliberately before session elevation. Losing requests cannot gain access.
       await repo.putNew(`identity/totp-used/${auth.user.id}/${totp.epoch}/${counter}.json`, { usedAt: iso(now) });

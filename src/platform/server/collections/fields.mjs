@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { randomUUID } from '../crypto.mjs';
 import { fail, text } from '../common.mjs';
 
 const MAX_FILE = 50 * 1024 * 1024;

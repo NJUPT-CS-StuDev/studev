@@ -1,5 +1,4 @@
-import { randomInt } from 'node:crypto';
-import { setTimeout as delay } from 'node:timers/promises';
+import { randomInt } from '../crypto.mjs';
 import { fail } from '../common.mjs';
 import { isConflict } from '../store.mjs';
 import { collectionKeys as keys, mapConcurrent, revisionKey, studentId } from './records.mjs';
@@ -37,7 +36,7 @@ export function roundQuota(repo, itemId, roundId, now) {
         return result.value;
       } catch (error) {
         if (!isConflict(error)) throw error;
-        await delay(randomInt(4, 19) * (1 + Math.floor(attempt / 3)));
+        await new Promise((resume) => setTimeout(resume, randomInt(4, 19) * (1 + Math.floor(attempt / 3))));
       }
     }
     fail(409, 'REVISION_CONFLICT', '提交人数较多，请稍后重试。');

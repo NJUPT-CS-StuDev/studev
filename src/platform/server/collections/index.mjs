@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { randomUUID } from '../crypto.mjs';
 import { fail, readJson, response } from '../common.mjs';
 import { chinaDay, flattenOrganizationTree, isWithin } from '../../organizations.mjs';
 import { pinnedCollections, roundAcceptsSubmissions, selectCollectionRound } from '../../collections.mjs';

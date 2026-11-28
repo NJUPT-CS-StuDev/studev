@@ -13,15 +13,12 @@ function memoryStore() {
     async list({ prefix }) { return { blobs: [...values.keys()].filter((key) => key.startsWith(prefix)).map((key) => ({ key })) }; },
   };
 }
-test('production parsed body wrapper reads original bounded bytes, not attacker-controlled parsed cache', async () => {
-  const request = new Request('https://example.org/api/platform/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"safe":true}' });
-  Object.defineProperty(request, 'body', { get: () => ({ role: 'owner' }) });
-  assert.deepEqual(await readJson(request), { safe: true });
-  const wrapped = new Request('https://example.org', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
-  wrapped._rawBodyBuffer = Buffer.from('{"safe":"preloaded"}');
-  assert.deepEqual(await readJson(wrapped), { safe: 'preloaded' });
-  wrapped._rawBodyBuffer = Buffer.alloc(65537);
-  await assert.rejects(readJson(wrapped), (e) => e.status === 413);
+test('a JSON body is read whole and bounded by the endpoint limit', async () => {
+  const post = (body) => new Request('https://example.org/api/platform/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
+  assert.deepEqual(await readJson(post('{"safe":"学号"}')), { safe: '学号' });
+  const chunks = new ReadableStream({ start(controller) { for (let i = 0; i < 3; i++) controller.enqueue(new Uint8Array(30000).fill(32)); controller.close(); } });
+  await assert.rejects(readJson(new Request('https://example.org', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: chunks, duplex: 'half' })), (e) => e.status === 413);
+  await assert.rejects(readJson(post('[1]')), (e) => e.status === 400);
 });
 test('mutations require exact valid origin and reject cross-site fetches', () => {
   const env = { PLATFORM_ORIGIN: 'https://example.org' };

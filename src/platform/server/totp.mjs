@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { base64, equalBytes, fromBase64, hmacSha1, randomBytes, utf8 } from './crypto.mjs';
 
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
 
@@ -22,18 +22,18 @@ function base32Decode(value) {
     bits += 5;
     if (bits >= 8) { output.push((accumulator >>> (bits - 8)) & 255); bits -= 8; }
   }
-  return Buffer.from(output);
+  return Uint8Array.from(output);
 }
 
 export function newTotpSecret() { return base32Encode(randomBytes(20)); }
 
 export function totpCode(secret, counter, digits = 6) {
   if (!Number.isSafeInteger(counter) || counter < 0 || ![6, 8].includes(digits)) throw new Error('Invalid TOTP counter.');
-  const message = Buffer.alloc(8);
-  message.writeBigUInt64BE(BigInt(counter));
-  const digest = createHmac('sha1', base32Decode(secret)).update(message).digest();
+  const message = new Uint8Array(8);
+  new DataView(message.buffer).setBigUint64(0, BigInt(counter));
+  const digest = hmacSha1(base32Decode(secret), message);
   const offset = digest[digest.length - 1] & 15;
-  return String((digest.readUInt32BE(offset) & 0x7fffffff) % (10 ** digits)).padStart(digits, '0');
+  return String((new DataView(digest.buffer, digest.byteOffset).getUint32(offset) & 0x7fffffff) % (10 ** digits)).padStart(digits, '0');
 }
 
 export function matchedTotpCounter(secret, code, milliseconds) {
@@ -42,32 +42,32 @@ export function matchedTotpCounter(secret, code, milliseconds) {
   // Prefer the current step when a rare six-digit collision occurs.
   for (const counter of [current, current - 1, current + 1]) {
     if (counter < 0) continue;
-    if (timingSafeEqual(Buffer.from(totpCode(secret, counter)), Buffer.from(code))) return counter;
+    if (equalBytes(utf8(totpCode(secret, counter)), utf8(code))) return counter;
   }
   return null;
 }
 
-function encryptionKey(encoded) {
+function encryptionKey(encoded, usage) {
   if (typeof encoded !== 'string' || !/^[A-Za-z0-9+/]{43}=$/.test(encoded)) throw new Error('Invalid encryption key.');
-  const key = Buffer.from(encoded, 'base64');
+  const key = fromBase64(encoded);
   if (key.length !== 32) throw new Error('Invalid encryption key.');
-  return key;
+  return crypto.subtle.importKey('raw', key, 'AES-GCM', false, [usage]);
 }
 
-export function encryptTotp(secret, key, userId) {
+// AES-256-GCM with the account bound as associated data. Web Crypto appends the 16-byte tag to the ciphertext;
+// the stored record keeps them apart.
+export async function encryptTotp(secret, key, userId) {
   const iv = randomBytes(12);
-  const cipher = createCipheriv('aes-256-gcm', encryptionKey(key), iv);
-  cipher.setAAD(Buffer.from(`studev-totp-v1:${userId}`));
-  const data = Buffer.concat([cipher.update(secret, 'utf8'), cipher.final()]);
-  return { version: 1, iv: iv.toString('base64'), data: data.toString('base64'), tag: cipher.getAuthTag().toString('base64') };
+  const sealed = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: utf8(`studev-totp-v1:${userId}`) },
+    await encryptionKey(key, 'encrypt'), utf8(secret)));
+  return { version: 1, iv: base64(iv), data: base64(sealed.subarray(0, -16)), tag: base64(sealed.subarray(-16)) };
 }
 
-export function decryptTotp(value, key, userId) {
+export async function decryptTotp(value, key, userId) {
   if (!value || value.version !== 1) throw new Error('Invalid encrypted TOTP.');
-  const iv = Buffer.from(value.iv, 'base64'), tag = Buffer.from(value.tag, 'base64');
+  const iv = fromBase64(value.iv), tag = fromBase64(value.tag), data = fromBase64(value.data);
   if (iv.length !== 12 || tag.length !== 16) throw new Error('Invalid encrypted TOTP.');
-  const decipher = createDecipheriv('aes-256-gcm', encryptionKey(key), iv);
-  decipher.setAAD(Buffer.from(`studev-totp-v1:${userId}`));
-  decipher.setAuthTag(tag);
-  return Buffer.concat([decipher.update(Buffer.from(value.data, 'base64')), decipher.final()]).toString('utf8');
+  const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv, additionalData: utf8(`studev-totp-v1:${userId}`) },
+    await encryptionKey(key, 'decrypt'), new Uint8Array([...data, ...tag]));
+  return new TextDecoder().decode(plain);
 }

@@ -143,7 +143,7 @@ async function collections(page, fixture, actor, { write, catalog, reads = [], a
       request: new Request(fixture.env.PLATFORM_ORIGIN + url.pathname + url.search, {
         method: request.method(), headers, body: request.postDataBuffer() || undefined,
       }),
-      env: fixture.env, clientIp: 'isolated-browser',
+      env: fixture.env, eo: { clientIp: 'isolated-browser' },
     });
     const response = alterResponse?.(path, request, result) || result;
     await route.fulfill({ status: response.status, headers: Object.fromEntries(response.headers), body: Buffer.from(await response.arrayBuffer()) });

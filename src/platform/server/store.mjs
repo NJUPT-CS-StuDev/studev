@@ -1,4 +1,4 @@
-import { createHash, createHmac, randomInt, randomUUID } from 'node:crypto';
+import { digest, hex, hmac, randomInt, randomUUID, utf8 } from './crypto.mjs';
 import { fail } from './common.mjs';
 
 const ROOT = 'platform-v1/';
@@ -8,16 +8,16 @@ const ROOT = 'platform-v1/';
 export async function revisionProjection(repo, key, prefix, build) {
   const [heads, snapshot] = await Promise.all([repo.heads(prefix), repo.get(key).catch(() => null)]);
   const ordered = [...heads.values()].sort((a, b) => a.key.localeCompare(b.key));
-  const version = createHash('sha256').update(JSON.stringify(ordered.map(({ key, etag }) => [key, etag]))).digest('hex');
+  const version = digest(JSON.stringify(ordered.map(({ key, etag }) => [key, etag])));
   if (snapshot?.version === version) return snapshot.rows;
   const rows = await build(heads);
   const value = { version, rows };
-  if (Buffer.byteLength(JSON.stringify(value)) <= 2 * 1024 * 1024) await repo.put(key, value).catch(() => {});
+  if (utf8(JSON.stringify(value)).length <= 2 * 1024 * 1024) await repo.put(key, value).catch(() => {});
   return rows;
 }
 
 export function isConflict(error) {
-  return error?.status === 409 || error?.statusCode === 409 || error?.code === 'PRECONDITION_FAILED' || [409, 412].includes(error?.$metadata?.httpStatusCode) || /already exists|precondition|conflict|onlyifnew/i.test(String(error?.message || ''));
+  return [409, 412].includes(error?.status ?? error?.statusCode) || error?.code === 'PRECONDITION_FAILED' || /already exists|precondition|conflict|onlyifnew/i.test(String(error?.message || ''));
 }
 export function createRepository(store, { now = Date.now, secret, revisions } = {}) {
   if (typeof secret !== 'string' || secret.length < 32) fail(503, 'NOT_CONFIGURED', '平台会话配置尚未完成。');
@@ -104,7 +104,7 @@ export function createRepository(store, { now = Date.now, secret, revisions } = 
   async function throttle(scope, client, limit, windowSeconds = 60) {
     if (!Number.isSafeInteger(limit) || limit < 1 || limit > 200 || !Number.isSafeInteger(windowSeconds) || windowSeconds < 1) throw new Error('Invalid internal rate limit');
     const bucket = Math.floor(now() / (windowSeconds * 1000));
-    const hash = createHmac('sha256', secret).update(`${scope}:${client || 'unknown'}`).digest('hex').slice(0, 32);
+    const hash = hex(hmac(secret, `${scope}:${client || 'unknown'}`)).slice(0, 32);
     const prefix = `rate/${scope}/${hash}/`;
     // Do not probe every earlier occupied slot with a remote conditional write.
     // Randomizing the first free candidate also spreads simultaneous campus-NAT requests.

@@ -878,7 +878,7 @@ test('dynamic org tree, batch pre-import without QQ, and seamless pending studen
       method, headers, body: body !== undefined ? JSON.stringify(body) : undefined,
     });
     try {
-      const res = await identity.handle({ request, env, clientIp: '127.0.0.1' }, `/api/platform${path}`);
+      const res = await identity.handle({ request, env, eo: { clientIp: '127.0.0.1' } }, `/api/platform${path}`);
       return { status: res.status, body: await res.json(), setCookie: res.headers.get('set-cookie') };
     } catch (e) {
       if (e instanceof AppError) return { status: e.status, body: { error: { code: e.code, message: e.message } } };

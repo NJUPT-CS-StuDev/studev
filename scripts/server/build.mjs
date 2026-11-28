@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 
 const release = JSON.parse(await readFile('src/data/campus-release.json', 'utf8'));
@@ -16,17 +17,29 @@ const academicYear = {
   endsBefore: end.toISOString().slice(0, 10),
 };
 
-// EdgeOne's Node wrapper declares a top-level `env`. Prebundle server dependencies
-// with identifier aliases so a dependency's `import { env } from 'process'` cannot collide.
-// This output is server-only and contains no build-time values or credentials.
+// The platform runs as an edge function (Web APIs only). Its one CPU-heavy step, the password function, runs in a
+// Node function the edge calls, so the edge build swaps ./scrypt.mjs for the module that makes that call.
+// These outputs are server-only and contain no build-time values or credentials.
+const edgeScrypt = {
+  name: 'edge-scrypt',
+  setup(build) {
+    build.onResolve({ filter: /\/scrypt\.mjs$/ }, (args) => ({ path: fileURLToPath(new URL('../../src/platform/server/scrypt.edge.mjs', import.meta.url)) }));
+  },
+};
 await build({
-  entryPoints: { platform: 'src/platform/server/entry.mjs' },
+  entryPoints: { edge: 'src/platform/server/edge.mjs' },
   outdir: '.server-build',
   outExtension: { '.js': '.mjs' },
   bundle: true,
   external: ['@edgeone/pages-blob'],
-  platform: 'node', format: 'esm', target: 'node20',
+  platform: 'neutral', mainFields: ['module', 'main'], conditions: ['worker', 'browser'], format: 'esm', target: 'es2022',
   define: { __STUDEV_ACADEMIC_YEAR__: JSON.stringify(academicYear) },
-  minifyIdentifiers: true, minifySyntax: true,
-  banner: { js: "import { createRequire as __platformCreateRequire } from 'node:module'; const require = __platformCreateRequire(import.meta.url);" },
+  plugins: [edgeScrypt],
+});
+await build({
+  entryPoints: { scrypt: 'src/platform/server/scrypt-service.mjs' },
+  outdir: '.server-build',
+  outExtension: { '.js': '.mjs' },
+  bundle: true,
+  platform: 'node', format: 'esm', target: 'node20',
 });
