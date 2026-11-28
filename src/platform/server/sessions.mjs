@@ -37,6 +37,8 @@ export function createSessions({ repo, now, loadUser, secret }) {
     if (typeof token !== 'string' || !ACCESS.test(token)) return null;
     let raw;
     try { raw = fromBase64(token); } catch { return null; }
+    // Only the canonical spelling: unused trailing bits would otherwise let one claim travel under several tokens.
+    if (base64url(raw) !== token) return null;
     const body = raw.subarray(0, -32), tag = raw.subarray(-32);
     if (tag.length !== 32 || !equalBytes(tag, mac(body))) return null;
     try { return JSON.parse(new TextDecoder().decode(body)); } catch { return null; }
