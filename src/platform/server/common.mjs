@@ -2,6 +2,20 @@ export class AppError extends Error {
   constructor(status, code, message) { super(message); this.name = 'AppError'; this.status = status; this.code = code; }
 }
 export function fail(status, code, message) { throw new AppError(status, code, message); }
+// The edge runtime has no AbortSignal.timeout or AbortSignal.any; these give the same signals there and in Node.
+export function timeoutSignal(ms) {
+  const controller = new AbortController();
+  setTimeout(() => controller.abort(new DOMException('The operation timed out.', 'TimeoutError')), ms);
+  return controller.signal;
+}
+export function anySignal(signals) {
+  const controller = new AbortController();
+  for (const signal of signals) {
+    if (signal.aborted) { controller.abort(signal.reason); break; }
+    signal.addEventListener('abort', () => controller.abort(signal.reason), { once: true });
+  }
+  return controller.signal;
+}
 export function response(body, status = 200, headers = {}) {
   return new Response(JSON.stringify(body), { status, headers: {
     'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store, private',

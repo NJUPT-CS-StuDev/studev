@@ -1,7 +1,7 @@
 // Email goes out through Resend's free plan (100 a day, 3000 a month, refused past that, never billed). The platform
 // sends only account mail: a password-reset link, an account-deletion confirmation, and a note that a password has
 // changed. A day's sending is capped below Resend's own limit, so a flood of requests is refused here first.
-import { fail } from './common.mjs';
+import { fail, timeoutSignal } from './common.mjs';
 
 const FROM = 'StuDev <noreply@hicancan.top>';
 export const DAILY_LIMIT = 90;
@@ -21,7 +21,7 @@ async function resendSend(key, message) {
     method: 'POST',
     headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
     body: JSON.stringify(message),
-    signal: AbortSignal.timeout(15000),
+    signal: timeoutSignal(15000),
   });
   if (!answer.ok) fail(503, 'EMAIL_FAILED', '邮件暂时发不出去，请稍后重试。');
 }

@@ -117,10 +117,15 @@ An inactive projection hides disabled/deleted accounts, and an older delayed
 publisher cannot replace a newer revision. Unchanged public fields need no new
 projection.
 
-The API runs as an edge function: `npm run build` bundles `.server-build/edge.mjs`
-(Web APIs only) for `edge-functions/api/platform/`, and the one Node function,
-`/node/scrypt`, computes password hashes for it. Deploy the static output and
-both functions together.
+The API runs in two places (`src/platform/server/routes.mjs`). Requests with small,
+bounded Blob work (session, config, refresh, sync, AI) are answered by the edge
+function `edge-functions/api/platform/` (`.server-build/edge.mjs`, Web APIs only);
+an edge function may send only about 50 subrequests per request. Every other
+request is forwarded by the edge to the Node function `/node/platform`
+(`.server-build/node.mjs`) with the visitor's address bound to the platform secret;
+sign-in and password changes run there with native scrypt. `edge-budget.test.mjs`
+keeps the edge requests within their budget. Deploy the static output and both
+functions together.
 
 `POST /sync` takes `{ tasks, settings }` and returns both merged. Tasks are merged
 by id and modification time, including deletion markers. Settings contain only

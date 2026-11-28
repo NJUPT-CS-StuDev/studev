@@ -1,6 +1,6 @@
 import { base64url, digest as sha256Hex, hex, hmac, randomUUID, safeEqual } from '../crypto.mjs';
 import { archiveAttachmentName, deadlineReached, roundAcceptsSubmissions } from '../../collections.mjs';
-import { fail, readJson, text } from '../common.mjs';
+import { fail, readJson, text, timeoutSignal } from '../common.mjs';
 import { isConflict } from '../store.mjs';
 import { isRecipient } from './definition.mjs';
 import { answersInput, fileInput } from './fields.mjs';
@@ -376,7 +376,7 @@ export function collectionSubmissions({ repo, env, now, getGateway, measure = (_
       return await finish(winner);
     } finally {
       if (disposable && candidates.length) {
-        const attempts = await Promise.allSettled(candidates.map((path) => storage.delete(path, AbortSignal.timeout(1200))));
+        const attempts = await Promise.allSettled(candidates.map((path) => storage.delete(path, timeoutSignal(1200))));
         const failed = candidates.filter((_, index) => attempts[index].status === 'rejected');
         if (failed.length) await queueCandidates(id, receipt, failed).catch(() => {});
       }

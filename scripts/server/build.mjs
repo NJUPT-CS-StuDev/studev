@@ -17,29 +17,18 @@ const academicYear = {
   endsBefore: end.toISOString().slice(0, 10),
 };
 
-// The platform runs as an edge function (Web APIs only). Its one CPU-heavy step, the password function, runs in a
-// Node function the edge calls, so the edge build swaps ./scrypt.mjs for the module that makes that call.
+// The platform runs as an edge function for the requests in src/platform/server/routes.mjs and as a Node function for
+// the rest. The edge build is Web APIs only and never checks a password, so ./scrypt.mjs is swapped for a stub there.
 // These outputs are server-only and contain no build-time values or credentials.
 const edgeScrypt = {
   name: 'edge-scrypt',
   setup(build) {
-    build.onResolve({ filter: /\/scrypt\.mjs$/ }, (args) => ({ path: fileURLToPath(new URL('../../src/platform/server/scrypt.edge.mjs', import.meta.url)) }));
+    build.onResolve({ filter: /\/scrypt\.mjs$/ }, () => ({ path: fileURLToPath(new URL('../../src/platform/server/scrypt.edge.mjs', import.meta.url)) }));
   },
 };
-await build({
-  entryPoints: { edge: 'src/platform/server/edge.mjs' },
-  outdir: '.server-build',
-  outExtension: { '.js': '.mjs' },
-  bundle: true,
-  external: ['@edgeone/pages-blob'],
-  platform: 'neutral', mainFields: ['module', 'main'], conditions: ['worker', 'browser'], format: 'esm', target: 'es2022',
-  define: { __STUDEV_ACADEMIC_YEAR__: JSON.stringify(academicYear) },
-  plugins: [edgeScrypt],
-});
-await build({
-  entryPoints: { scrypt: 'src/platform/server/scrypt-service.mjs' },
-  outdir: '.server-build',
-  outExtension: { '.js': '.mjs' },
-  bundle: true,
-  platform: 'node', format: 'esm', target: 'node20',
-});
+const shared = { outdir: '.server-build', outExtension: { '.js': '.mjs' }, bundle: true, external: ['@edgeone/pages-blob'], format: 'esm',
+  define: { __STUDEV_ACADEMIC_YEAR__: JSON.stringify(academicYear) } };
+await build({ ...shared, entryPoints: { edge: 'src/platform/server/edge.mjs' },
+  platform: 'neutral', mainFields: ['module', 'main'], conditions: ['worker', 'browser'], target: 'es2022', plugins: [edgeScrypt] });
+// EdgeOne's Node wrapper declares a top-level `env`; identifiers are minified so a dependency's `env` cannot collide.
+await build({ ...shared, entryPoints: { node: 'src/platform/server/node.mjs' }, platform: 'node', target: 'node20', minifyIdentifiers: true });

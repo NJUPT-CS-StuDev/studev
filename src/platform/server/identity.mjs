@@ -1,5 +1,5 @@
 import { digest, hashPassword, randomHex, randomToken, randomUUID, safeEqual, validPasswordHash, verifyPassword } from './crypto.mjs';
-import { fail, platformOrigin, readJson, requireOrigin, response, text } from './common.mjs';
+import { fail, platformOrigin, readJson, requireOrigin, response, text, timeoutSignal } from './common.mjs';
 import { isConflict } from './store.mjs';
 import { createSessions, hasAuthorization, bearerBootstrap } from './sessions.mjs';
 import { decryptTotp, encryptTotp, matchedTotpCounter, newTotpSecret } from './totp.mjs';
@@ -408,7 +408,7 @@ export function createIdentity({ repo, env, now = Date.now, academicYear, mailer
       if (!visible) fail(404, 'MEMBER_NOT_FOUND', '找不到这位成员。');
       // The image is public; its address must not disclose the private QQ number.
       let picture;
-      try { picture = await fetcher(qqAvatarUrl(user.qq), { signal: AbortSignal.timeout(8000), redirect: 'error' }); }
+      try { picture = await fetcher(qqAvatarUrl(user.qq), { signal: timeoutSignal(8000), redirect: 'error' }); }
       catch { fail(502, 'AVATAR_UNAVAILABLE', '头像暂时无法加载。'); }
       const type = picture.headers.get('Content-Type')?.split(';')[0].trim();
       if (!picture.ok || !['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(type) || Number(picture.headers.get('Content-Length') || 0) > 2 * 1024 * 1024) fail(502, 'AVATAR_UNAVAILABLE', '头像暂时无法加载。');

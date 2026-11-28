@@ -6,7 +6,7 @@ import { createHash } from 'node:crypto';
 import { readdir, readFile, writeFile } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 
-const roots = ['dist', 'edge-functions', 'cloud-functions', '.server-build/edge.mjs', '.server-build/scrypt.mjs', 'edgeone.json'];
+const roots = ['dist', 'edge-functions', 'cloud-functions', '.server-build/edge.mjs', '.server-build/node.mjs', 'edgeone.json'];
 const files = [];
 async function walk(path) {
     let entries;

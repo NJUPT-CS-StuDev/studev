@@ -1,6 +1,6 @@
 import { Completion, completionRequest, situationError, tools, toolsFor, reachError } from '../../campus/world/assistant.mjs';
 import { externalAlias, externalDescription, externalParameters, externalSchemaBudget, externalToolLimit } from '../../campus/world/external-tools.mjs';
-import { fail, readJson, response } from './common.mjs';
+import { anySignal, fail, readJson, response, timeoutSignal } from './common.mjs';
 
 /**
  * The models the free quota answers with, asked in this order: EdgeOne Makers' built-in model first, then NVIDIA's
@@ -96,7 +96,7 @@ export function createAiService({ identity, repo, env, now = Date.now, fetcher =
       try {
         const upstream = await measure('inference', () => fetcher(member.url, { method: 'POST',
           headers: { Authorization: `Bearer ${env[member.key]}`, 'Content-Type': 'application/json' },
-          signal: AbortSignal.any([begun.signal, AbortSignal.timeout(FINISH), ...asked]),
+          signal: anySignal([begun.signal, timeoutSignal(FINISH), ...asked]),
           body: JSON.stringify(completionRequest(member.model, messages, situation, now(), body.last === true, { tools: available, preferred: body.preferredTools, reach: body.reach })) }));
         if (upstream.ok && upstream.body) return response.stream(relay(upstream.body, body.last ? [] : available.map(tool => tool.function.name)));
         if (upstream.status === 429) limited++;
