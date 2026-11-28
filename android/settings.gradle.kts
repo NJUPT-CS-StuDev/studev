@@ -15,4 +15,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "StuDev"
-include(":app")
+include(":app", ":baselineprofile")

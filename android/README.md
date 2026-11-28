@@ -26,6 +26,15 @@ Missing inputs produce build errors. `kernels.ps1` uses the wasm-search and
 wayfind checkouts' Android builds and copies their libraries and bindings into
 `android/kernels/`; `-SearchPath` and `-WayfindPath` select other checkouts.
 
+The release APK carries a baseline profile: the code StuDev runs when it starts
+and opens its tabs, compiled ahead of time on installation (cold start on the
+emulator 1.56 s → 1.44 s median). After a change to startup or navigation,
+regenerate it with a device or emulator attached:
+`.\gradlew.bat :app:generateReleaseBaselineProfile`; the result lands in
+`app/src/release/generated/baselineProfiles/` and is committed.
+`:baselineprofile:connectedBenchmarkReleaseAndroidTest` measures cold start with
+and without it.
+
 Debug supports arm64 and x86_64; release is arm64 only. MapLibre uses the same
 OpenGL renderer and SurfaceView on all devices. Theme changes restyle Compose,
 the map and system bars without recreating the native surface.
