@@ -9,9 +9,9 @@ export interface ModelLook { hidden: string | null; flatten: number; night: numb
 const VERTEX = `#version 300 es
 uniform mat4 u_matrix;
 uniform float u_flatten;
-in vec3 a_pos;
-in vec3 a_normal;
-in vec3 a_colour;
+layout(location = 0) in vec3 a_pos;
+layout(location = 1) in vec3 a_normal;
+layout(location = 2) in vec3 a_colour;
 out vec3 v_normal;
 out vec3 v_colour;
 void main() {
@@ -49,43 +49,50 @@ const multiply = (a: ArrayLike<number>, b: number[]) => {
 
 /** The layer draws nothing until its buffer arrives; the plain footprints stand in until then. */
 export function modelLayer(index: ModelIndex, bytes: ArrayBuffer, look: () => ModelLook): CustomLayerInterface {
-    let program: WebGLProgram, vao: WebGLVertexArrayObject, uniforms: Record<string, WebGLUniformLocation | null>;
+    let program: WebGLProgram, vao: WebGLVertexArrayObject, uniforms: Record<string, WebGLUniformLocation | null> | undefined;
+    let map: MapLibre, parallel: { COMPLETION_STATUS_KHR: number } | null;
     const place = MercatorCoordinate.fromLngLat(index.origin, 0);
     const unit = place.meterInMercatorCoordinateUnits() * index.scale;
     const model = [unit, 0, 0, 0, 0, -unit, 0, 0, 0, 0, unit, 0, place.x, place.y, 0, 1];
     const count = bytes.byteLength / 12;
     return {
         id: 'models', type: 'custom', renderingMode: '3d',
-        onAdd(_map: MapLibre, gl) {
+        // Shaders compile while frames go on: nothing here waits on the driver (attributes have fixed locations), and
+        // the program is first queried when the driver reports it done, so the buildings never stall the main thread.
+        onAdd(target: MapLibre, gl) {
             const context = gl as WebGL2RenderingContext;
+            map = target;
+            parallel = context.getExtension('KHR_parallel_shader_compile');
             const compile = (type: number, source: string) => {
                 const shader = context.createShader(type)!;
                 context.shaderSource(shader, source);
                 context.compileShader(shader);
-                if (!context.getShaderParameter(shader, context.COMPILE_STATUS)) throw new Error(context.getShaderInfoLog(shader) ?? 'shader');
                 return shader;
             };
             program = context.createProgram()!;
             context.attachShader(program, compile(context.VERTEX_SHADER, VERTEX));
             context.attachShader(program, compile(context.FRAGMENT_SHADER, FRAGMENT));
             context.linkProgram(program);
-            uniforms = Object.fromEntries(['u_matrix', 'u_flatten', 'u_night', 'u_faded', 'u_fade_to'].map(name => [name, context.getUniformLocation(program, name)]));
             vao = context.createVertexArray()!;
             context.bindVertexArray(vao);
             context.bindBuffer(context.ARRAY_BUFFER, context.createBuffer());
             context.bufferData(context.ARRAY_BUFFER, bytes, context.STATIC_DRAW);
-            const attribute = (name: string, size: number, type: number, normalized: boolean, offset: number) => {
-                const at = context.getAttribLocation(program, name);
+            const attribute = (at: number, size: number, type: number, normalized: boolean, offset: number) => {
                 context.enableVertexAttribArray(at);
                 context.vertexAttribPointer(at, size, type, normalized, 12, offset);
             };
-            attribute('a_pos', 3, context.SHORT, false, 0);
-            attribute('a_normal', 3, context.BYTE, true, 6);
-            attribute('a_colour', 3, context.UNSIGNED_BYTE, true, 9);
+            attribute(0, 3, context.SHORT, false, 0);
+            attribute(1, 3, context.BYTE, true, 6);
+            attribute(2, 3, context.UNSIGNED_BYTE, true, 9);
             context.bindVertexArray(null);
         },
         render(gl, args: CustomRenderMethodInput) {
             const context = gl as WebGL2RenderingContext;
+            if (!uniforms) {
+                if (parallel && !context.getProgramParameter(program, parallel.COMPLETION_STATUS_KHR)) { map.triggerRepaint(); return; }
+                if (!context.getProgramParameter(program, context.LINK_STATUS)) throw new Error(context.getProgramInfoLog(program) || 'shader');
+                uniforms = Object.fromEntries(['u_matrix', 'u_flatten', 'u_night', 'u_faded', 'u_fade_to'].map(name => [name, context.getUniformLocation(program, name)]));
+            }
             const state = look();
             context.useProgram(program);
             context.bindVertexArray(vao);

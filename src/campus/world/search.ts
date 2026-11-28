@@ -24,7 +24,11 @@ export function warmSearch() {
     if (location.pathname === '/search/') { start(); return; }
     const idle = () => { if ('requestIdleCallback' in window) requestIdleCallback(start, { timeout: 8000 }); else setTimeout(start, 3000); };
     // An idle main thread is not an idle network: a page whose first view is still arriving is not raced for bandwidth.
-    if (!document.querySelector('main[data-settles]')) { idle(); return; }
+    // A page has arrived when it has loaded, or, for one that keeps loading its view (the map), when it says so.
+    if (!document.querySelector('main[data-settles]')) {
+        if (document.readyState === 'complete') idle(); else window.addEventListener('load', idle, { once: true });
+        return;
+    }
     let started = false;
     const once = () => { if (!started) { started = true; idle(); } };
     window.addEventListener('studev:settled', once, { once: true });
