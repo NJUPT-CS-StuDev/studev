@@ -1,5 +1,5 @@
 import { SEARCH_BUNDLE_FORMAT } from 'wasm-search';
-import { MODELS_FORMAT } from '../map/model/packing';
+import { MODELS_FORMAT } from '../map/model/packing.ts';
 import type { ReleaseFormats } from './release';
 
 /** The encodings this build reads. A release in any other is one only a newer build can use: the site waits for it,
