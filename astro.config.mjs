@@ -7,6 +7,7 @@ import tailwindcss from '@tailwindcss/vite';
 import localFonts from './src/site/build/local-fonts.mjs';
 import webTokens from './src/site/build/web-tokens.mjs';
 import searchPreload from './src/site/build/search-preload.mjs';
+import modulePreload from './src/site/build/module-preload.mjs';
 import { copyFile, readdir, rm } from 'node:fs/promises';
 
 const excludedSitemapPaths = new Set([
@@ -29,7 +30,7 @@ export default defineConfig({
   vite: {
     plugins: [tailwindcss()],
   },
-  integrations: [react(), webTokens(), searchPreload(), localFonts(), {
+  integrations: [react(), webTokens(), searchPreload(), modulePreload(), localFonts(), {
     // EdgeOne reads edgeone.json from the project root; a copy beside the built
     // files covers deployments of the output directory alone.
     name: 'studev-edgeone-config',

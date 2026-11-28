@@ -63,6 +63,19 @@ jobs:
           for name in MAKERS_MODELS_KEY NVIDIA_API_KEY RESEND_API_KEY; do
             makers env set "$name" "${!name}"
           done
+      - id: snapshot
+        run: echo "version=$(curl -fsS https://data.hicancan.top/campus-release.json | node -pe 'JSON.parse(require("fs").readFileSync(0)).version')" >> "$GITHUB_OUTPUT"
+      # Snapshot paths are immutable, so the files of the snapshot being deployed are kept between deployments; a code
+      # change ships without downloading the campus data again.
+      - uses: actions/cache@v5
+        with:
+          key: campus-snapshot-${{ steps.snapshot.outputs.version }}
+          path: |
+            public/data
+            public/space
+            public/search
+            public/texts
+            public/knowledge
       - name: Read the published campus snapshot
         run: npm run data:pull
       - run: npm run typecheck
