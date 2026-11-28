@@ -40,6 +40,10 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    {/* The site lives at its origin alone: www and any other host that serves these files move there before anything runs. */}
+    <script is:inline define:vars={{ origin: PRODUCT_CONFIG.ORIGIN }}>
+      if (location.origin !== origin && location.hostname.endsWith(new URL(origin).hostname)) location.replace(origin + location.pathname + location.search + location.hash);
+    </script>
     <meta name="theme-color" content={tokens.color.light.paper} data-light={tokens.color.light.paper} data-dark={tokens.color.dark.paper} />
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" sizes="180x180" href="/pwa-icons/180.png" />

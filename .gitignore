@@ -68,3 +68,4 @@ GEMINI.md
 
 # APK distribution is fetched from GitHub Releases during deployment.
 /public/download/
+/public/deployment.txt

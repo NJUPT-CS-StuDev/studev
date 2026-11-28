@@ -79,7 +79,7 @@ Git 的本质不是一个普通的网盘，而是一座==代码的时光机==：
 \text{StuDev} = \text{Student Development} \equiv \text{Study} + \text{Develop}
 ```
 
-这个你正在浏览的网站（[studev.hicancan.top](https://studev.hicancan.top)），每一个页面、每一个像素背后的源文件，都在 [StuDev 的 GitHub 仓库](https://github.com/NJUPT-CS-StuDev/studev) 中公开陈列、接受全校同学的审视与考验。
+这个你正在浏览的网站（[studev.cn](https://studev.cn)），每一个页面、每一个像素背后的源文件，都在 [StuDev 的 GitHub 仓库](https://github.com/NJUPT-CS-StuDev/studev) 中公开陈列、接受全校同学的审视与考验。
 
 它不是某个大佬的私人展示橱窗，而是==我们为你量身准备的“新手村第一块沙盒与试验田”==。你不需要害怕犯错，这里所有的代码、文档和流程，都欢迎你推门进来探索。
 
@@ -132,7 +132,7 @@ graph TD
 
 1. 打开 [StuDev 的官方 GitHub 仓库](https://github.com/NJUPT-CS-StuDev/studev)；
 2. 在文件列表中，顺着路径点开：`src` → `pages` → `index.astro`；
-3. 对照着你正在访问的 [StuDev 网站首页](https://studev.hicancan.top/)，仔细看一眼代码文件：找一找哪一行写出了网站的名字，哪一行定义了首页的介绍文字。
+3. 对照着你正在访问的 [StuDev 网站首页](https://studev.cn/)，仔细看一眼代码文件：找一找哪一行写出了网站的名字，哪一行定义了首页的介绍文字。
 
 > [!TIP]
 > **打破对“软件”的神秘感**  

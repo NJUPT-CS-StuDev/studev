@@ -5,8 +5,8 @@
 **南邮计软网安学生发展中心官网与社团平台 · 时空联动的开源数字校园**  
 *中心官网 · 社团协作 ｜ 时空联动 · 聚合搜索 · 数字孪生*
 
-[![Website](https://img.shields.io/badge/在线访问-studev.hicancan.top-2563eb?style=flat-square)](https://studev.hicancan.top/)
-[![Android](https://img.shields.io/badge/Android_客户端-v2.3.8-16a34a?style=flat-square&logo=android&logoColor=white)](https://studev.hicancan.top/download/)
+[![Website](https://img.shields.io/badge/在线访问-studev.cn-2563eb?style=flat-square)](https://studev.cn/)
+[![Android](https://img.shields.io/badge/Android_客户端-v2.3.8-16a34a?style=flat-square&logo=android&logoColor=white)](https://studev.cn/download/)
 [![Astro](https://img.shields.io/badge/Astro-7.4-ff5d01?style=flat-square&logo=astro&logoColor=white)](https://astro.build/)
 [![React](https://img.shields.io/badge/React-19.3-087ea4?style=flat-square&logo=react&logoColor=white)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0-3178c6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
@@ -19,7 +19,7 @@
 
 **简体中文** · [English](./README.en.md)
 
-[**在线访问 studev.hicancan.top**](https://studev.hicancan.top/) · [**下载 Android 客户端**](https://studev.hicancan.top/download/) · [**站内架构全景**](https://studev.hicancan.top/about/) · [**学生发展中心专栏**](https://studev.hicancan.top/club/) · [**用户协议**](https://studev.hicancan.top/terms/) · [**隐私政策**](https://studev.hicancan.top/privacy/)
+[**在线访问 studev.cn**](https://studev.cn/) · [**下载 Android 客户端**](https://studev.cn/download/) · [**站内架构全景**](https://studev.cn/about/) · [**学生发展中心专栏**](https://studev.cn/club/) · [**用户协议**](https://studev.cn/terms/) · [**隐私政策**](https://studev.cn/privacy/)
 
 </div>
 
@@ -200,7 +200,7 @@ studev/
 
 ## 数据与应用独立发布
 
-`studev.hicancan.top` 发布应用界面和账号 API，`data.hicancan.top` 发布公共校园数据。
+`studev.cn` 发布应用界面和账号 API，`data.studev.cn` 发布公共校园数据。
 两个入口由 `product.json` 配置；三端通过应用的 `app-release.json` 发现数据入口。
 地图、校园事实、知识与检索资源各自保留版本，数据清单选择当前组合。数据更新不会重建网站或要求安装新版客户端。
 
@@ -234,6 +234,6 @@ npm run test:site      # 文章排版、静态构建产物、图表与公式、�
 
 - **非官方系统声明**：**StuDev 不是南京邮电大学的官方行政或教务系统，与学校及其各职能部门不存在行政隶属或官方授权关系。** 平台所呈现的课表、考场、校历与教室状态均整理自学校面向全体在校学生公开的教学安排，仅供日常学习规划参考；**一切调课、停课及考务安排均以学校教务处及所在学院发布的最新正式通知为准。**
 - **纠错与下线响应**：若学校相关部门、教师或同学认为某项信息存在偏差或不宜展示，请发送邮件至 `studev@hicancan.top`，我们在核实后将及时予以更正或下线。
-- **合规备案**：网站 [苏ICP备2026038426号-1](https://beian.miit.gov.cn/) · Android App [苏ICP备2026038426号-2A](https://beian.miit.gov.cn/) · [苏公网安备32011302323214号](https://beian.mps.gov.cn/#/query/webSearch?code=32011302323214) · [用户协议](https://studev.hicancan.top/terms/) · [隐私政策](https://studev.hicancan.top/privacy/)
+- **合规备案**：网站 [苏ICP备2026038426号-3](https://beian.miit.gov.cn/) · Android App [苏ICP备2026038426号-2A](https://beian.miit.gov.cn/) · [苏公网安备32011302323512号](https://beian.mps.gov.cn/#/query/webSearch?code=32011302323512) · [用户协议](https://studev.cn/terms/) · [隐私政策](https://studev.cn/privacy/)
 - **开源许可证**：本项目源代码采用 [GNU Affero General Public License v3.0](./LICENSE)（`AGPL-3.0`）协议开源。  
   Copyright © 2026 StuDev Studio.

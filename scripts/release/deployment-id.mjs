@@ -1,6 +1,7 @@
 // The identity of what a site deployment uploads: a SHA-256 over the path and bytes of every file in it. A build whose
 // identity matches the live site's /deployment.txt changes nothing there, so it is not deployed again; EdgeOne counts
-// every deployment against the monthly build minutes.
+// every deployment against the monthly build minutes. The EdgeOne CLI builds the site again before uploading, so the
+// identity is also written to public/, which that build copies into the site.
 import { createHash } from 'node:crypto';
 import { readdir, readFile, writeFile } from 'node:fs/promises';
 import { join, relative } from 'node:path';
@@ -19,5 +20,5 @@ for (const file of files.map(file => relative('.', file).replaceAll('\\', '/')).
     hash.update(file + '\0').update(await readFile(file)).update('\0');
 }
 const id = hash.digest('hex');
-if (process.argv.includes('--write')) await writeFile('dist/deployment.txt', id + '\n');
+if (process.argv.includes('--write')) for (const file of ['dist/deployment.txt', 'public/deployment.txt']) await writeFile(file, id + '\n');
 console.log(id);

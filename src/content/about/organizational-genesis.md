@@ -155,7 +155,7 @@ flowchart TD
 flowchart LR
     subgraph Core["StuDev 核心架构"]
         direction TB
-        C["StuDev 数字化平台<br/>(studev.hicancan.top)"]
+        C["StuDev 数字化平台<br/>(studev.cn)"]
     end
 
     subgraph Sections["四大内容空间"]

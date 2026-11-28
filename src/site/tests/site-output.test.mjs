@@ -164,9 +164,9 @@ test('a page shares StuDev at most once, and keeps a clean canonical URL', async
     });
     // Sharing lives where one decides to pass StuDev on (the download page), at most once, and only ever StuDev's own address.
     assert.ok(shared.length <= 1, `${file}: at most one share action`);
-    for (const value of shared) assert.ok(value.startsWith('https://studev.hicancan.top/'), `${file}: shares StuDev itself`);
+    for (const value of shared) assert.ok(value.startsWith('https://studev.cn/'), `${file}: shares StuDev itself`);
     const url = new URL(canonical);
-    assert.equal(url.origin, 'https://studev.hicancan.top');
+    assert.equal(url.origin, 'https://studev.cn');
     assert.equal(url.search, '');
     assert.equal(url.hash, '');
   }
@@ -187,7 +187,7 @@ test('sitemap lists every unique indexable canonical page on the formal domain',
 
   const index = await readFile(join(output, 'sitemap-index.xml'), 'utf8');
   const indexUrls = [...index.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => match[1]);
-  assert.deepEqual(indexUrls, ['https://studev.hicancan.top/sitemap-0.xml']);
+  assert.deepEqual(indexUrls, ['https://studev.cn/sitemap-0.xml']);
 
   const sitemap = await readFile(join(output, 'sitemap-0.xml'), 'utf8');
   const urls = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => match[1]);
@@ -195,7 +195,7 @@ test('sitemap lists every unique indexable canonical page on the formal domain',
   assert.deepEqual([...urls].sort(), [...expected].sort(), 'sitemap must match indexable canonical URLs');
   for (const value of urls) {
     const url = new URL(value);
-    assert.equal(url.origin, 'https://studev.hicancan.top');
+    assert.equal(url.origin, 'https://studev.cn');
     assert.equal(url.search, '');
     assert.equal(url.hash, '');
     assert.doesNotMatch(url.pathname, /^\/(?:404\/?|life\/(?:organizational-genesis|anti-formalism-council)\/?)$/);
@@ -203,7 +203,7 @@ test('sitemap lists every unique indexable canonical page on the formal domain',
 });
 
 test('robots and HTML advertise the formal sitemap', async () => {
-  const sitemapUrl = 'https://studev.hicancan.top/sitemap-index.xml';
+  const sitemapUrl = 'https://studev.cn/sitemap-index.xml';
   const robots = await readFile(join(output, 'robots.txt'), 'utf8');
   assert.match(robots, /^User-agent: \*$/m);
   assert.match(robots, /^Allow: \/$/m);

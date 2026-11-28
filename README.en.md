@@ -5,8 +5,8 @@
 **Official Site & Club Platform of the NJUPT CS Student Development Center · An Open-Source Spatial-Temporal Digital Campus**  
 *Official Site · Club Operations ｜ Spatial-Temporal Linkage · Unified Search · Digital Twin*
 
-[![Website](https://img.shields.io/badge/Live-studev.hicancan.top-2563eb?style=flat-square)](https://studev.hicancan.top/)
-[![Android](https://img.shields.io/badge/Android_APK-v2.3.8-16a34a?style=flat-square&logo=android&logoColor=white)](https://studev.hicancan.top/download/)
+[![Website](https://img.shields.io/badge/Live-studev.cn-2563eb?style=flat-square)](https://studev.cn/)
+[![Android](https://img.shields.io/badge/Android_APK-v2.3.8-16a34a?style=flat-square&logo=android&logoColor=white)](https://studev.cn/download/)
 [![Astro](https://img.shields.io/badge/Astro-7.4-ff5d01?style=flat-square&logo=astro&logoColor=white)](https://astro.build/)
 [![React](https://img.shields.io/badge/React-19.3-087ea4?style=flat-square&logo=react&logoColor=white)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0-3178c6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
@@ -19,7 +19,7 @@
 
 [简体中文](./README.md) · **English**
 
-[**Live Site (studev.hicancan.top)**](https://studev.hicancan.top/) · [**Download Android App**](https://studev.hicancan.top/download/) · [**Architecture & About**](https://studev.hicancan.top/about/) · [**Club Portal**](https://studev.hicancan.top/club/) · [**Terms of Service**](https://studev.hicancan.top/terms/) · [**Privacy Policy**](https://studev.hicancan.top/privacy/)
+[**Live Site (studev.cn)**](https://studev.cn/) · [**Download Android App**](https://studev.cn/download/) · [**Architecture & About**](https://studev.cn/about/) · [**Club Portal**](https://studev.cn/club/) · [**Terms of Service**](https://studev.cn/terms/) · [**Privacy Policy**](https://studev.cn/privacy/)
 
 </div>
 
@@ -200,7 +200,7 @@ Every university shares the same fundamental spatial-temporal primitives: academ
 
 ## Independent Data and Application Releases
 
-`studev.hicancan.top` serves the application and account API; `data.hicancan.top` serves public campus data.
+`studev.cn` serves the application and account API; `data.studev.cn` serves public campus data.
 Both origins are configured in `product.json`. All three clients discover the data entry through the application's
 `app-release.json`. The public snapshot selects independently versioned map, facts, knowledge and search resources.
 Data updates do not rebuild the website or require a new native application.
@@ -236,6 +236,6 @@ npm run test:site      # Article drawing, built HTML, diagrams, formulas & link 
 
 - **Non-Official Disclaimer**: **StuDev is an independent student-run open-source project and is not an official administrative or academic system of Nanjing University of Posts and Telecommunications (NJUPT).** All timetables, exam rooms, calendar dates, and classroom states are compiled from publicly released university teaching schedules for personal study reference only. **Always refer to official notices from the Academic Affairs Office and your school for authoritative schedule or exam changes.**
 - **Notice & Takedown**: For errata or removal requests, please contact `studev@hicancan.top`.
-- **Filings**: Website [苏ICP备2026038426号-1](https://beian.miit.gov.cn/) · Android app [苏ICP备2026038426号-2A](https://beian.miit.gov.cn/) · [苏公网安备32011302323214号](https://beian.mps.gov.cn/#/query/webSearch?code=32011302323214) · [Terms of Service](https://studev.hicancan.top/terms/) · [Privacy Policy](https://studev.hicancan.top/privacy/)
+- **Filings**: Website [苏ICP备2026038426号-3](https://beian.miit.gov.cn/) · Android app [苏ICP备2026038426号-2A](https://beian.miit.gov.cn/) · [苏公网安备32011302323512号](https://beian.mps.gov.cn/#/query/webSearch?code=32011302323512) · [Terms of Service](https://studev.cn/terms/) · [Privacy Policy](https://studev.cn/privacy/)
 - **License**: Licensed under the [GNU Affero General Public License v3.0](./LICENSE) (`AGPL-3.0`).  
   Copyright © 2026 StuDev Studio.

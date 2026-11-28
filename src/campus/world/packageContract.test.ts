@@ -9,7 +9,7 @@ beforeAll(async () => { release = await read('src/data/campus-release.json'); })
 describe('the public campus snapshot', () => {
     it('reads knowledge by its released address, including every page of a complete material', async () => {
         const index = await read<{ topics: { id: string }[]; materials: { path: string }[] }>(join('public/data', release.version, 'knowledge/knowledge.json'));
-        const fetch = vi.fn(async (url: string) => new Response(await readFile(join('public', decodeURIComponent(new URL(url, 'https://studev.hicancan.top').pathname)), 'utf8')));
+        const fetch = vi.fn(async (url: string) => new Response(await readFile(join('public', decodeURIComponent(new URL(url, 'https://studev.cn').pathname)), 'utf8')));
         vi.stubGlobal('fetch', fetch);
         const tools = new CampusTools();
         try {
