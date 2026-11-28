@@ -12,6 +12,7 @@ on:
 
 permissions:
   contents: read
+  actions: write
 
 concurrency:
   group: campus-data
@@ -66,6 +67,12 @@ jobs:
       - run: npm run test:data
       - run: npm run test:campus
       - run: npm run data:publish
+      # The data site serves only the current release, and a site built for the replaced contract cannot read this one:
+      # deploy the site now rather than after its usual wait, so the two are apart for one build, not until a push.
+      - if: env.NEW_CONTRACT == 'true'
+        run: gh workflow run deploy.yml --ref main
+        env:
+          GH_TOKEN: ${{ github.token }}
       - id: built
         run: |
           node --input-type=module <<'JS'
