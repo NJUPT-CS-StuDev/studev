@@ -2,7 +2,7 @@ import { expect, it, vi } from 'vitest';
 
 vi.mock('../data/campus-release.json', () => ({ default: {
     version: 'r1', base: '/data/r1', map_base: '/space/m1',
-    knowledge_base: '/knowledge/k1', search_base: '/search/s1', search_format: 'wasm-search-bundle-v5', texts_base: '/texts/s1',
+    knowledge_base: '/knowledge/k1', search_base: '/search/s1', formats: { search: 'wasm-search-bundle-v5', models: 'models-planes-v1' }, texts_base: '/texts/s1',
 } }));
 
 vi.mock('node:fs/promises', () => ({

@@ -18,6 +18,7 @@ import { loadNetwork, loadSpace, loadStyle, spaceBase, type Place, type Space } 
 import { formLink } from '@/world/product';
 import { visibleRouteText } from './model/routeText';
 import type { ModelIndex } from './models';
+import { unpackModels } from './model/packing';
 import { CampusScene, type CampusModel, type RoomPaint, type SceneLabel } from './scene';
 import { fetchJson } from '@/world/fetch';
 import { holidayMap } from '@/world/events';
@@ -141,13 +142,14 @@ export default function MapApp() {
             onPlace: id => handlers.current.onPlace(id), onEmpty: () => handlers.current.onEmpty(), onView: () => handlers.current.onView(),
         });
         instance.whenReady(() => { if (!cancelled) setScene(instance); });
-        // The buildings, and the page's other bulk downloads, follow the first view instead of competing with it.
+        // Downloads go in the order they pay off: the first view, then the buildings drawn over it, and only then the
+        // page's bulk downloads for later (the search index), which wait for `studev:settled`.
         instance.whenSettled(() => {
             if (cancelled) return;
-            window.dispatchEvent(new Event('studev:settled'));
             void Promise.all([fetchJson<ModelIndex>(`${spaceBase()}/models.json`), fetch(`${spaceBase()}/models.bin.gzip`).then(response => { if (!response.ok || !response.body) throw new Error(String(response.status)); return new Response(response.body.pipeThrough(new DecompressionStream('gzip'))).arrayBuffer(); })])
-                .then(([index, bytes]) => { if (!cancelled) instance.showModels(index, bytes); })
-                .catch(() => undefined); // The plain forms keep standing where the models did not arrive.
+                .then(([index, packed]) => { if (!cancelled) instance.showModels(index, unpackModels(new Uint8Array(packed)).buffer as ArrayBuffer); })
+                .catch(() => undefined) // The plain forms keep standing where the models did not arrive.
+                .finally(() => { if (!cancelled) window.dispatchEvent(new Event('studev:settled')); });
         });
         return () => { cancelled = true; instance.destroy(); setScene(null); };
     }, [world]); // eslint-disable-line react-hooks/exhaustive-deps

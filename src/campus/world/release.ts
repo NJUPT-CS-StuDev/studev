@@ -8,9 +8,11 @@ export interface CampusPointer {
     map_version: string; data_version: string; knowledge_version: string;
     map_base: string; knowledge_base: string; search_base: string; texts_base: string;
     search_stable_base?: string;
-    /** The search bundle's format; an engine that reads another cannot use this release. */
-    search_format: string;
+    /** The encodings of the release's binary resources; a client that reads others cannot use it (formats.ts). */
+    formats: ReleaseFormats;
 }
+
+export interface ReleaseFormats { search: string; models: string }
 
 export interface CampusRelease extends CampusPointer {
     core?: string[]; all?: string[]; bytes?: number;
@@ -20,11 +22,11 @@ export interface CampusRelease extends CampusPointer {
 export function campusPointer(release: CampusRelease): CampusPointer {
     const {
         version, base, built_at, teaching, exams, labs, rooms, map_version, data_version, knowledge_version,
-        map_base, knowledge_base, search_base, texts_base, search_stable_base, search_format,
+        map_base, knowledge_base, search_base, texts_base, search_stable_base, formats,
     } = release;
     return {
         version, base, built_at, teaching, exams, labs, rooms, map_version, data_version, knowledge_version,
-        map_base, knowledge_base, search_base, texts_base, search_stable_base, search_format,
+        map_base, knowledge_base, search_base, texts_base, search_stable_base, formats,
     };
 }
 
@@ -40,7 +42,7 @@ export function validRelease(value: unknown): value is CampusRelease {
         && name(r.teaching) && name(r.rooms) && (r.exams === null || name(r.exams)) && (r.labs === null || name(r.labs))
         && path(r.map_base, 'space') && path(r.knowledge_base, 'knowledge') && path(r.search_base, 'search') && path(r.texts_base, 'texts')
         && (r.search_stable_base === undefined || (r.search_stable_base !== r.search_base && path(r.search_stable_base, 'search')))
-        && typeof r.search_format === 'string';
+        && !!r.formats && typeof r.formats.search === 'string' && typeof r.formats.models === 'string';
 }
 
 export function releaseAt<T extends CampusPointer>(release: T, origin: string, local = false): T {

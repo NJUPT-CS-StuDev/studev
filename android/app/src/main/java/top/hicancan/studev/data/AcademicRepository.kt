@@ -291,7 +291,7 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
         }
         suspend fun open(context: Context): AcademicRepository = withContext(Dispatchers.IO) {
             val saved = activeRelease(context)
-            val release = runCatching { Json.decodeFromString<DataRelease>(saved.readText()).takeIf { validRelease(it) && searchable(it) } }.getOrNull() ?: run {
+            val release = runCatching { Json.decodeFromString<DataRelease>(saved.readText()).takeIf { validRelease(it) && readable(it) } }.getOrNull() ?: run {
                 Json.decodeFromString(context.assets.open("data/release.json").bufferedReader().use { it.readText() })
             }
             require(validRelease(release))
@@ -327,7 +327,7 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
             }
             if (text == null) return@coroutineScope runtime?.android?.let { Discovery(it, null, unreadable = false) }
             withContext(Dispatchers.IO) { try {
-                val release = releaseFromManifest(text)?.takeIf(::searchable) ?: return@withContext Discovery(app, null, unreadable = true)
+                val release = releaseFromManifest(text)?.takeIf(::readable) ?: return@withContext Discovery(app, null, unreadable = true)
                 val at = URI(entry)
                 Discovery(app, activate(context, release.copy(base = at.resolve(release.base).toString(),
                     map_base = at.resolve(release.map_base).toString(), knowledge_base = at.resolve(release.knowledge_base).toString(),
@@ -344,7 +344,9 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
                 && Regex("/$prefix/[A-Za-z0-9._-]+").matches(uri.path)
         }.getOrDefault(false)
         /** Whether this app's search engine reads the release's bundles; a release it cannot is one only a newer app can use. */
-        private fun searchable(release: DataRelease) = release.search_format == top.hicancan.search.bundleFormat()
+        /** A release in the encodings this app reads: its search engine's bundle and the buildings' packing. */
+        private fun readable(release: DataRelease) = release.formats.search == top.hicancan.search.bundleFormat()
+            && release.formats.models == top.hicancan.studev.map.Packing.FORMAT
         private fun validRelease(release: DataRelease) = Regex("[A-Za-z0-9._-]+").matches(release.version) && runCatching { val base = URI(release.base); base.path == "/data/${release.version}" && (base.scheme == null || base.scheme == "https") && base.rawUserInfo == null && base.rawQuery == null && base.rawFragment == null }.getOrDefault(false)
             && componentBase(release.map_base, "space") && componentBase(release.knowledge_base, "knowledge")
             && componentBase(release.search_base, "search")

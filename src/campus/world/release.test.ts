@@ -1,14 +1,14 @@
 import { readFile } from 'node:fs/promises';
 import { expect, it } from 'vitest';
-import { SEARCH_BUNDLE_FORMAT } from 'wasm-search';
+import { FORMATS } from './formats';
 import { campusPointer, releaseAt, resourceAt, validRelease } from './release';
 
 it('resolves every public component of the actual snapshot against the discovered data entry', async () => {
     const snapshot = JSON.parse(await readFile('src/data/campus-release.json', 'utf8'));
     expect(validRelease(snapshot)).toBe(true);
-    // The snapshot this build ships with is in the search format its engine reads.
-    expect(snapshot.search_format).toBe(SEARCH_BUNDLE_FORMAT);
-    expect(validRelease({ ...snapshot, search_format: undefined })).toBe(false);
+    // The snapshot this build ships with is in the encodings it reads.
+    expect(snapshot.formats).toEqual(FORMATS);
+    expect(validRelease({ ...snapshot, formats: undefined })).toBe(false);
     const resolved = releaseAt(snapshot, 'https://moved-data.example');
     for (const key of ['base', 'map_base', 'knowledge_base', 'search_base', 'texts_base'] as const)
         expect(resolved[key]).toBe(`https://moved-data.example${snapshot[key]}`);

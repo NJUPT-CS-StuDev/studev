@@ -32,6 +32,11 @@ class ParityTest {
         assertEquals(source.course.name, events.first { it.meeting?.teaching_class?.id == "custom:${custom.id}" }.name)
         assertEquals("PersonalAlias", events.first { it.meeting?.id == source.id }.name)
     }
+    @Test fun theBuildingsUnpackByteForByteAsTheWebPacksThem() {
+        val case = golden.getValue("modelPacking").jsonObject
+        val decode = { key: String -> java.util.Base64.getDecoder().decode(case.getValue(key).jsonPrimitive.content) }
+        assertArrayEquals(decode("gpu"), top.hicancan.studev.map.Packing.unpack(decode("packed")))
+    }
     @Test fun campusTimeMatchesAcrossMidnightAndDeviceDaylightSaving() {
         golden.getValue("campusTimes").jsonArray.forEach { item ->
             val test = item.jsonObject

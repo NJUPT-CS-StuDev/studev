@@ -9,8 +9,8 @@ import PwaPanel from '../pwa/PwaPanel.astro';
 import { PRODUCT_CONFIG } from '../campus/world/product';
 import product from '../../product.json';
 import { ClientRouter } from 'astro:transitions';
-// fill: the page is one full-height application (the map) with no footer. It announces `studev:settled` once its
-// first view has arrived, and downloads that are not part of that view wait for it.
+// fill: the page is one full-height application (the map) with no footer. It announces `studev:settled` once what it
+// shows has arrived (the map: its first view, then the buildings), and downloads for later wait for it.
 interface Props { title?: string; description?: string; active?: string; noindex?: boolean; fill?: boolean; noPwa?: boolean; }
 const { title = PRODUCT_CONFIG.APP_NAME, description = PRODUCT_CONFIG.POSITIONING, active = '', noindex = false, fill = false, noPwa = false } = Astro.props;
 const personalMenu = active !== 'login';

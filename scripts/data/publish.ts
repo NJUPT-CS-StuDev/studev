@@ -17,7 +17,9 @@ if (!verifyOnly && !prepareOnly) {
     const baseline = await fetch(entry, { cache: 'no-cache', signal: AbortSignal.timeout(10_000) });
     if (baseline.ok) {
         const previous: unknown = await baseline.json();
-        if (!validRelease(previous)) throw new Error('the current public release is not readable; publication stopped');
+        // An unreadable live release stops publication: it is damage, or newer than this code. Replacing an older
+        // contract is the one exception, and only when the person who starts it says so (NEW_CONTRACT).
+        if (!validRelease(previous) && process.env.NEW_CONTRACT !== 'true') throw new Error('the current public release is not readable; publication stopped');
         if (JSON.stringify(previous) === JSON.stringify(snapshot)) {
             const publishedPointer = await fetch(pointerEntry, { cache: 'no-cache', signal: AbortSignal.timeout(10_000) });
             if (publishedPointer.ok && JSON.stringify(await publishedPointer.json()) === encodedPointer) {

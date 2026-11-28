@@ -23,10 +23,13 @@ const values: Record<string, string> = { map, knowledge: knowledge.replace(/^kno
 const response = await fetch(`${product.campusOrigin}/campus-release.json`, { cache: 'no-cache', signal: AbortSignal.timeout(15_000) });
 if (response.ok) {
     const previous: unknown = await response.json();
-    if (!validRelease(previous)) throw new Error('the current campus pointer is unreadable');
-    values.previous_map = previous.map_base.split('/').at(-1)!;
-    values.previous_search = previous.search_base.split('/').at(-1)!;
-    await mkdir('src/data', { recursive: true }); await writeFile('src/data/campus-release.json', JSON.stringify(previous));
+    // A pointer this code cannot read is either damage or the contract this release replaces; only the person who
+    // starts a contract change says which (NEW_CONTRACT), and that build starts without the old release's caches.
+    if (validRelease(previous)) {
+        values.previous_map = previous.map_base.split('/').at(-1)!;
+        values.previous_search = previous.search_base.split('/').at(-1)!;
+        await mkdir('src/data', { recursive: true }); await writeFile('src/data/campus-release.json', JSON.stringify(previous));
+    } else if (process.env.NEW_CONTRACT !== 'true') throw new Error('the current campus pointer is unreadable');
 } else if (response.status !== 404) throw new Error(`reading current campus pointer failed (${response.status})`);
 for (const [name, value] of Object.entries(values)) {
     if (!/^[A-Za-z0-9._-]+$/.test(value)) throw new Error(`unexpected ${name} release name`);

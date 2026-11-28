@@ -30,6 +30,9 @@ export default defineConfig({
   },
   vite: {
     plugins: [tailwindcss()],
+    // .data is the data pipeline's cache, not part of the site. Watching it costs a dev server nearly a gigabyte of
+    // file handles, and on Windows a watched directory cannot be renamed, which breaks the pipeline's atomic swaps.
+    server: { watch: { ignored: ['**/.data/**'] } },
   },
   integrations: [react(), webTokens(), searchPreload(), modulePreload(), localFonts(), {
     // EdgeOne reads edgeone.json from the project root; a copy beside the built

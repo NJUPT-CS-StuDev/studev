@@ -40,7 +40,7 @@ public sealed partial class Models : IDisposable
         using var unzip = new GZipStream(new MemoryStream(gzipped), CompressionMode.Decompress);
         using var raw = new MemoryStream();
         unzip.CopyTo(raw);
-        var data = raw.ToArray();
+        var data = Packing.Unpack(raw.ToArray());
         count = (int)(raw.Length / 12);
         vertices = device.CreateBuffer(data, BindFlags.VertexBuffer);
         constants = device.CreateBuffer(new BufferDescription((uint)System.Runtime.CompilerServices.Unsafe.SizeOf<Constants>(), BindFlags.ConstantBuffer, Vortice.Direct3D11.ResourceUsage.Dynamic, CpuAccessFlags.Write));

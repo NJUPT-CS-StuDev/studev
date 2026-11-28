@@ -5,7 +5,7 @@ import { existsSync } from 'node:fs';
 import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
-import { SEARCH_BUNDLE_FORMAT } from 'wasm-search';
+import { FORMATS, readsFormats } from '../../src/campus/world/formats.ts';
 import product from '../../product.json' with { type: 'json' };
 import { resourceAt, validRelease, type CampusRelease } from '../../src/campus/world/release.ts';
 
@@ -26,16 +26,17 @@ async function currentSnapshot(entry: string, publicRoot: string): Promise<Campu
     return snapshot;
 }
 
-/** The snapshot a build can ship: one in the search format its engine reads. A build for a new engine that starts
- * while the data site is still being republished for it waits for that publication instead of shipping data its
- * engine cannot read (as a deployment once did). */
+/** The snapshot a build can ship: one in the encodings it reads. A build for a new encoding that starts while the
+ * data site is still being republished for it waits for that publication instead of shipping data it cannot read
+ * (as a deployment once did). */
 async function readableSnapshot(entry: string, publicRoot: string, wait = 20 * 60_000): Promise<CampusRelease> {
     const deadline = Date.now() + wait;
     for (;;) {
         const snapshot = await currentSnapshot(entry, publicRoot);
-        if (snapshot.search_format === SEARCH_BUNDLE_FORMAT) return snapshot;
-        if (Date.now() >= deadline) throw new Error(`the data site serves search format ${snapshot.search_format}; this build's engine reads ${SEARCH_BUNDLE_FORMAT}`);
-        console.log(`waiting for the data site to publish ${SEARCH_BUNDLE_FORMAT} (it serves ${snapshot.search_format})`);
+        if (readsFormats(snapshot.formats)) return snapshot;
+        const served = JSON.stringify(snapshot.formats ?? null), read = JSON.stringify(FORMATS);
+        if (Date.now() >= deadline) throw new Error(`the data site serves formats ${served}; this build reads ${read}`);
+        console.log(`waiting for the data site to publish formats ${read} (it serves ${served})`);
         await delay(30_000);
     }
 }

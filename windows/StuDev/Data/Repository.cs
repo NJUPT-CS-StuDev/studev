@@ -39,7 +39,7 @@ public sealed class Repository
                 var release = JsonSerializer.Deserialize(File.ReadAllText(kept), FactsJson.Default.DataRelease) ?? throw new InvalidDataException("release manifest");
                 Valid(release);
                 // A release kept by an older StuDev may be in a search format this one does not read: take the latest instead.
-                if (Searchable(release)) return Task.FromResult(new Repository(release));
+                if (Readable(release)) return Task.FromResult(new Repository(release));
                 File.Delete(kept);
             } catch (Exception error) when (error is IOException or InvalidDataException or JsonException) {
                 // This cache contains public release routing, never preferences,
@@ -53,7 +53,7 @@ public sealed class Repository
             using var file = archive.GetEntry("release.json")?.Open() ?? throw new InvalidDataException("bundled release manifest");
             var release = JsonSerializer.Deserialize(file, FactsJson.Default.DataRelease) ?? throw new InvalidDataException("bundled release manifest");
             Valid(release);
-            if (Searchable(release)) return Task.FromResult(new Repository(release));
+            if (Readable(release)) return Task.FromResult(new Repository(release));
         }
         catch (Exception error) when (error is IOException or InvalidDataException or JsonException) { }
         return Discover();
@@ -90,7 +90,7 @@ public sealed class Repository
             SearchBase = new Uri(origin, release.SearchBase).AbsoluteUri,
             SearchStableBase = release.SearchStableBase is { } stable ? new Uri(origin, stable).AbsoluteUri : null, TextsBase = new Uri(origin, release.TextsBase).AbsoluteUri };
         Valid(release);
-        if (!Searchable(release)) throw new NotSupportedException("校园数据已经更新，这个版本的 StuDev 读不了，请更新到新版本。");
+        if (!Readable(release)) throw new NotSupportedException("校园数据已经更新，这个版本的 StuDev 读不了，请更新到新版本。");
         return new Repository(release);
     }
 
@@ -104,7 +104,9 @@ public sealed class Repository
     }
 
     /** Whether this app's search engine reads the release's bundles; a release it cannot is one only a newer app can use. */
-    private static bool Searchable(DataRelease release) => release.SearchFormat == Kernels.Search.WasmSearchNativeMethods.BundleFormat();
+    /** A release in the encodings this app reads: its search engine's bundle and the buildings' packing. */
+    private static bool Readable(DataRelease release) => release.Formats is { } formats
+        && formats.Search == Kernels.Search.WasmSearchNativeMethods.BundleFormat() && formats.Models == Map.Packing.Format;
 
     public void Activate() {
         Storage.Write(ActiveRelease, JsonSerializer.Serialize(Release, FactsJson.Default.DataRelease));

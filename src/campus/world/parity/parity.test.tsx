@@ -20,12 +20,19 @@ import type { Exam, ExamChange, Lab, RoomDay, TeachingMeeting, TeachingPeriod, T
 import { momentNow } from '../time';
 import { changeLines, examHistory, examImpact, examTime, examVersionSeen, examVersionTime } from '../exams';
 import type { ExamRecord } from '../data';
+import { packModels, unpackModels } from '@/map/model/packing';
 
 const holidays = holidayMap(golden.calendar as CalendarTerm[]);
 const line: Timeline = { term: golden.term as TeachingTerm, periods: golden.periods as TeachingPeriod[], meetings: golden.schedules[0]!.meetings as unknown as TeachingMeeting[], labs: [], exams: [], holidays, tasks: [], run: { rule: golden.run as unknown as MorningRun, days: golden.runDays as string[], adjust: 5 } };
 const brief = (event: ReturnType<typeof eventsOn>[number]) => ({ kind: event.kind, name: event.name, short: event.short, start: event.start, end: event.end, room: event.room });
 
 describe('the shared web / Android real-data contract', () => {
+    it('packs and unpacks the buildings in transit byte for byte', () => {
+        const gpu = Uint8Array.from(Buffer.from(golden.modelPacking.gpu, 'base64'));
+        const packed = Uint8Array.from(Buffer.from(golden.modelPacking.packed, 'base64'));
+        expect(packModels(gpu)).toEqual(packed);
+        expect(unpackModels(packed)).toEqual(gpu);
+    });
     it('projects all class exam versions, including unaffected updates and honestly dated historical publications', () => {
         for (const item of golden.examHistory.times) expect(examTime(item.value)).toBe(item.text);
         for (const item of golden.examHistory.comparisons) expect(changeLines(item.change as ExamChange)).toEqual(item.lines);

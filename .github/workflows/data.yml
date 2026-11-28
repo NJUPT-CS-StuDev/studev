@@ -2,6 +2,11 @@ name: Publish campus data
 
 on:
   workflow_dispatch:
+    inputs:
+      new_contract:
+        description: This release replaces the published one's contract (formats.ts); the live release is then unreadable by design.
+        type: boolean
+        default: false
   repository_dispatch:
     types: [upstream-release]
 
@@ -20,6 +25,7 @@ jobs:
       DATA_REPOSITORY: ${{ secrets.DATA_REPOSITORY }}
       DATA_TOKEN: ${{ secrets.DATA_TOKEN }}
       EDGEONE_API_TOKEN: ${{ secrets.EDGEONE_API_TOKEN }}
+      NEW_CONTRACT: ${{ inputs.new_contract }}
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6

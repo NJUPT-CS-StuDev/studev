@@ -13,6 +13,7 @@ import { compileBundle } from 'wasm-search/compile';
 import { campusConfig } from '../../campus.config.ts';
 import { packageFacts } from './package-facts.ts';
 import { SPACE_FILES } from './space-contract.ts';
+import { MODELS_FORMAT, packModels } from '../../src/campus/map/model/packing.ts';
 import type { Exam, Room, TeachingClass, TeachingMeeting } from '../../src/campus/world/facts.ts';
 import { style } from '../../design/map/campus-style.mjs';
 import { displayName } from '../../src/campus/map/model/displayName.ts';
@@ -559,8 +560,8 @@ async function buildCampus(
         if (file === 'style.json') {
             await write(join(to, file), style());
         } else if (file === 'models.bin.gzip') {
-            // A fifth of the size, and no host has to be trusted to compress it.
-            await writeFile(join(to, file), gzipSync(await readFile(join(from, 'models.bin')), { level: 9 }));
+            // Packed for transit (packing.ts) and compressed here, so no host has to be trusted to compress it.
+            await writeFile(join(to, file), gzipSync(packModels(await readFile(join(from, 'models.bin'))), { level: 9 }));
         } else {
             await copyFile(join(from, file), join(to, file));
         }
@@ -768,8 +769,9 @@ async function main() {
         knowledge_base: `/knowledge/${knowledge.version}`,
         map_base: mapPath,
         search_base: `/search/${searchVersion}`,
-        // The bundle format, as its compiler wrote it: an app whose engine reads another asks to be updated.
-        search_format: search.format,
+        // The encodings, as written: the search bundle's by its compiler, the buildings' by packing.ts. A client that
+        // reads others asks to be updated.
+        formats: { search: search.format, models: MODELS_FORMAT },
         ...(search.base ? { search_stable_base: search.base } : {}),
         texts_base: `/texts/${searchVersion}`,
         version,

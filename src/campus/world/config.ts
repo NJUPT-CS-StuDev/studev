@@ -1,21 +1,21 @@
 import {
     version, base, built_at, teaching, exams, labs, rooms, map_version, data_version, knowledge_version,
-    map_base, knowledge_base, search_base, texts_base, search_format,
+    map_base, knowledge_base, search_base, texts_base, formats,
 } from '../../data/campus-release.json';
 import product from '../../../product.json';
 import { PRODUCT_CONFIG } from './product';
-import { SEARCH_BUNDLE_FORMAT } from 'wasm-search';
+import { readsFormats } from './formats';
 import { CAMPUS_POINTER_PATH, releaseAt, validRelease, type CampusPointer } from './release';
 
-/** A release this build can read: valid, and in the search format its engine reads. */
-const readable = (value: unknown): value is CampusPointer => validRelease(value) && value.search_format === SEARCH_BUNDLE_FORMAT;
+/** A release this build can read: valid, and in the encodings it reads. */
+const readable = (value: unknown): value is CampusPointer => validRelease(value) && readsFormats(value.formats);
 
 export const CAMPUS_RELEASE_CACHE = 'studev-campus-release';
 // The offline resource inventories belong to the service worker. Keeping them
 // out of this module removes hundreds of kilobytes from each campus entry.
 const local: CampusPointer = {
     version, base, built_at, teaching, exams, labs, rooms, map_version, data_version, knowledge_version,
-    map_base, knowledge_base, search_base, texts_base, search_format,
+    map_base, knowledge_base, search_base, texts_base, formats,
 };
 const browser = typeof window !== 'undefined';
 const entry = new URL(CAMPUS_POINTER_PATH, product.campusOrigin).href;

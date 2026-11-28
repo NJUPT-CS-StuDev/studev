@@ -15,7 +15,7 @@ object Models {
 
     suspend fun load(repository: top.hicancan.studev.data.AcademicRepository): Loaded {
         val index = Json.decodeFromString<Index>(repository.bytes("space/仙林/models.json").decodeToString())
-        val raw = java.util.zip.GZIPInputStream(repository.bytes("space/仙林/models.bin.gzip").inputStream()).use { it.readBytes() }
+        val raw = Packing.unpack(java.util.zip.GZIPInputStream(repository.bytes("space/仙林/models.bin.gzip").inputStream()).use { it.readBytes() })
         return Loaded(index, ByteBuffer.allocateDirect(raw.size).order(ByteOrder.LITTLE_ENDIAN).put(raw).apply { rewind() })
     }
 

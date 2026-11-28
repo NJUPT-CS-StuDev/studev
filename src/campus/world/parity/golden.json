@@ -2014,6 +2014,10 @@
    "az": 275.69518757832185
   }
  ],
+ "modelPacking": {
+  "gpu": "/38AgAAAAQIDBAUGAID/f////wCABwgJAAAAAP9/f4H+AP8BAQD//wCAAAAAAAAADABUAQUAAAB/yLSg",
+  "packed": "/gL/Ahb/AP8AAP8B/QGq/wD/AAIAAf8C9QAA/wD/Af9/AAACAIEAAAOA/gB/BAcAAMgFCP8AtAYJAQCg"
+ },
  "glance": {
   "moments": [
    {

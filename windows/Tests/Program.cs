@@ -29,6 +29,11 @@ var campusFrame = StuDev.Map.CampusFrame.Of(model);
 checks++;
 foreach (var (name, got) in new[] { ("west", campusFrame.West), ("south", campusFrame.South), ("east", campusFrame.East), ("north", campusFrame.North), ("longitude", campusFrame.Longitude), ("latitude", campusFrame.Latitude) })
     if (Math.Abs(got - (double)golden["frame"]![name]!) > 1e-9) failures.Add($"campus frame {name}: expected {golden["frame"]![name]}, got {got}");
+{
+    checks++;
+    var gpu = Convert.FromBase64String((string)golden["modelPacking"]!["gpu"]!);
+    if (!StuDev.Map.Packing.Unpack(Convert.FromBase64String((string)golden["modelPacking"]!["packed"]!)).AsSpan().SequenceEqual(gpu)) failures.Add("model packing: unpacked bytes differ from the web's");
+}
 foreach (var test in golden["sun"]!.AsArray())
 {
     checks++;

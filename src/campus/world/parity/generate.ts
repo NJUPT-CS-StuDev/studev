@@ -1,6 +1,7 @@
 // `npm run golden` after the data or a shared rule changes. No network; freezes the web's actual results for Android to pass.
 import { readFileSync, writeFileSync } from 'node:fs';
 import { sunAt } from '@/map/model/sun';
+import { packModels } from '@/map/model/packing';
 import { campusFrame } from '@/map/model/frame';
 import { PRODUCT_CONFIG } from '@/world/product';
 import { courseIdentity, courseTones, linkedCourse, sameCourse, timelineTones } from '@/timetable/model/courseColors';
@@ -373,5 +374,11 @@ const glance = {
 const campus = campusFrame(read<{ buildings: { geometry: import('geojson').Geometry }[]; context: { geometry: import('geojson').Geometry }[] }>(`${base}/space/仙林/model.json`));
 const sun = [['2026-11-14', 480], ['2026-11-14', 720], ['2026-11-14', 1020], ['2026-06-21', 360], ['2026-06-21', 780], ['2026-12-22', 750], ['2028-03-01', 600], ['2026-03-20', 1140]]
     .map(([date, min]) => ({ date, min, ...sunAt(date as string, min as number, campus) }));
-writeFileSync('src/campus/world/parity/golden.json', JSON.stringify({ campusTimes, practice, examHistory: examHistoryCases, frame: campus, sun, glance, materials: { cases: materialCases, counts: materialCounts }, answers, entities, finding, routing, steps: stepCases, memory: memoryCases, settingsSync, thread, chats, assistant: assistantCases, semantics, courses, tasks, labs, places, labels, from, recommend, hoursCases, runDays: line.run!.days, lastLesson: lastDay, around, tones, sharing, source: { release: release.version, teaching: release.teaching }, term, periods, calendar, run, schedules, days, moments, rooms: { days: roomDays, cases: rooms }, edgeCases: { colours, names, compactPlaces, attendanceExams, examAttendance, examReminders } }, null, 1) + '\n');
+// The buildings in transit: vertices at the int16 edges, steps that wrap, every normal and colour byte. Each client
+// unpacks `packed` and must get `gpu` back, byte for byte.
+const modelVertices = [[32767, -32768, 0, 1, 2, 3, 4, 5, 6], [-32768, 32767, -1, 255, 0, 128, 7, 8, 9], [0, 0, 32767, 127, 129, 254, 0, 255, 1], [1, -1, -32768, 0, 0, 0, 0, 0, 0], [12, 340, 5, 0, 0, 127, 200, 180, 160]];
+const modelGpu = new Uint8Array(modelVertices.length * 12);
+modelVertices.forEach(([x, y, z, ...rest], i) => { const view = new DataView(modelGpu.buffer); view.setInt16(i * 12, x!, true); view.setInt16(i * 12 + 2, y!, true); view.setInt16(i * 12 + 4, z!, true); rest.forEach((byte, k) => { modelGpu[i * 12 + 6 + k] = byte; }); });
+const modelPacking = { gpu: Buffer.from(modelGpu).toString('base64'), packed: Buffer.from(packModels(modelGpu)).toString('base64') };
+writeFileSync('src/campus/world/parity/golden.json', JSON.stringify({ campusTimes, practice, examHistory: examHistoryCases, frame: campus, sun, modelPacking, glance, materials: { cases: materialCases, counts: materialCounts }, answers, entities, finding, routing, steps: stepCases, memory: memoryCases, settingsSync, thread, chats, assistant: assistantCases, semantics, courses, tasks, labs, places, labels, from, recommend, hoursCases, runDays: line.run!.days, lastLesson: lastDay, around, tones, sharing, source: { release: release.version, teaching: release.teaching }, term, periods, calendar, run, schedules, days, moments, rooms: { days: roomDays, cases: rooms }, edgeCases: { colours, names, compactPlaces, attendanceExams, examAttendance, examReminders } }, null, 1) + '\n');
 console.log(JSON.stringify({ schedules: schedules.length, days: days.length, moments: moments.length, rooms: rooms.length }));

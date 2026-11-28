@@ -6,7 +6,9 @@ using System.Text.Json.Serialization;
 namespace StuDev.Data;
 
 public sealed record DataRelease(string Version, string Base, string BuiltAt, string Teaching, string? Exams, string? Labs, string Rooms, string? MapVersion, string? DataVersion,
-    string? KnowledgeVersion, string MapBase, string KnowledgeBase, string SearchBase, string TextsBase, string? SearchFormat, string? SearchStableBase = null);
+    string? KnowledgeVersion, string MapBase, string KnowledgeBase, string SearchBase, string TextsBase, ReleaseFormats? Formats, string? SearchStableBase = null);
+/** The encodings of the release's binary resources; a release in others is one only a newer app can use. */
+public sealed record ReleaseFormats(string Search, string Models);
 public sealed record AppRelease(string VersionName, int VersionCode);
 public sealed record TeachingWeek(int Week, string Start, string End);
 public sealed record TeachingTerm(string Term, int Year, int Number, List<TeachingWeek> Weeks, string ObservedAt);
