@@ -35,6 +35,9 @@
       ]
     }
   ],
+  "rewrites": [
+    { "source": "/moved/*", "destination": "/moved/index.html" }
+  ],
   "redirects": [
     { "source": "/download/windows/*", "destination": "https://dl.hicancan.top/windows/:splat", "statusCode": 302 }
   ]

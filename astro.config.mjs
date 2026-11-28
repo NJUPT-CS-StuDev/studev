@@ -14,6 +14,7 @@ const excludedSitemapPaths = new Set([
   '/404',
   '/login',
   '/signed-in',
+  '/moved',
   '/account',
   '/members',
   '/forms',

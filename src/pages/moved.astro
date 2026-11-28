@@ -1,16 +1,20 @@
+---
+// Where every retired StuDev address sends a person: the old host answers a page visit with a 301 to
+// /moved/<old host><old path><old query>, edgeone.json serves this page for all of /moved/*, and the page names the
+// old address, then goes on to the same page here. Adding an address to retire is one more host in the Cloudflare
+// redirect rule and in RETIRED below.
+---
 <!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="StuDev 已迁移至 studev.cn。">
-  <meta name="robots" content="noindex, follow">
+  <meta name="robots" content="noindex">
   <meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#121416" media="(prefers-color-scheme: dark)">
-  <link rel="icon" type="image/png" href="/logo.png">
-  <link rel="canonical" href="https://studev.cn/">
-  <title>StuDev 搬家啦</title>
-  <style>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <title>StuDev 搬家了</title>
+  <style is:global>
     :root {
       color-scheme: light;
       --paper: #FFFFFF;
@@ -42,17 +46,25 @@
 </head>
 <body>
   <main>
-    <img class="mark" src="/logo.png" alt="StuDev" width="56" height="56">
+    <img class="mark" src="/assets/logo.png" alt="StuDev" width="56" height="56">
     <h1>Hi，老朋友，我们搬家了！</h1>
     <p class="lead">StuDev 有了自己的新家：<span class="domain">studev.cn</span></p>
-    <p>课表、地图、搜索和收集都在那里，地址更短，也更好记。<br>新域名由 hicancan 为爱发电，StuDev 依旧免费、开源、没有广告。</p>
-    <a class="enter" id="enter" href="https://studev.cn/">前往 studev.cn</a>
+    <p id="from" hidden>你打开的旧地址 <span class="domain" id="old"></span> 已经停用。</p>
+    <p>课表、地图、搜索和收集都在这里，地址更短，也更好记。<br>新域名由 hicancan 为爱发电，StuDev 依旧免费、开源、没有广告。</p>
+    <a class="enter" id="enter" href="/">进入 StuDev</a>
     <p class="soon" id="soon" aria-live="polite">6 秒后自动带你过去</p>
     <p class="notes">网页版需要在新地址重新登录一次，装在桌面上的网页版请从新地址重新添加。<br>App 用户在「我的」里更新到最新版就好。</p>
   </main>
-  <script>
-    // The same page on the new site: an old bookmark or shared link still lands where it meant to.
-    const target = 'https://studev.cn' + location.pathname + location.search + location.hash;
+  <script is:inline>
+    const RETIRED = ['njupt.hicancan.top', 'studev.hicancan.top'];
+    const [, , host = '', ...rest] = location.pathname.split('/');
+    if (RETIRED.includes(host)) {
+      document.getElementById('old').textContent = host;
+      document.getElementById('from').hidden = false;
+    }
+    // The same page here, so an old bookmark or shared link still lands where it meant to. Only a path on this site.
+    const asked = new URL('/' + rest.join('/') + location.search + location.hash, location.origin);
+    const target = asked.origin === location.origin ? asked.pathname + asked.search + asked.hash : '/';
     document.getElementById('enter').href = target;
     let left = 6;
     const soon = document.getElementById('soon');
