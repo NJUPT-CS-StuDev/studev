@@ -3,7 +3,7 @@
 // changed. A day's sending is capped below Resend's own limit, so a flood of requests is refused here first.
 import { fail, timeoutSignal } from './common.mjs';
 
-const FROM = 'StuDev <noreply@hicancan.top>';
+const FROM = 'StuDev <noreply@studev.cn>';
 export const DAILY_LIMIT = 90;
 
 export function createMailer({ env, repo, send = resendSend }) {
