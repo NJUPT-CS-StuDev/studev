@@ -1,4 +1,5 @@
 import { digest, hashPassword, randomHex, randomToken, randomUUID, safeEqual, validPasswordHash, verifyPassword } from './crypto.mjs';
+import { validatePassword } from './password.mjs';
 import { fail, platformOrigin, readJson, requireOrigin, response, text, timeoutSignal } from './common.mjs';
 import { isConflict } from './store.mjs';
 import { createSessions, hasAuthorization, bearerBootstrap } from './sessions.mjs';
@@ -36,10 +37,6 @@ function profileComplete(user) {
 }
 const studentKey = (studentId) => `identity/student/${studentId}.json`;
 
-function validatePassword(value) {
-  if (typeof value !== 'string' || value.length < 12 || value.length > 256) fail(400, 'PASSWORD_POLICY', '密码需要 12–256 个字符。');
-  return value;
-}
 function qqValue(value) {
   if (typeof value !== 'string' || !QQ.test(value)) fail(400, 'INVALID_QQ', '请填写有效的数字 QQ 号。');
   return value;
@@ -320,12 +317,17 @@ export function createIdentity({ repo, env, now = Date.now, academicYear, mailer
     await repo.put(tokenKey(token), { purpose, userId: user.id, securityVersion: user.securityVersion, expiresAt: now() + minutes * 60_000 });
     return `${origin}${path}?${purpose}=${token}`;
   }
-  async function spendToken(purpose, token) {
+  // `accept` checks the request against the link's account first; when it throws, the link stays usable.
+  async function spendToken(purpose, token, accept = () => {}) {
     if (typeof token !== 'string' || !TOKEN.test(token)) fail(400, 'LINK_INVALID', '链接无效或已过期，请重新申请。');
     const record = await repo.get(tokenKey(token));
-    if (record) await repo.remove(tokenKey(token));
     const user = record?.purpose === purpose && record.expiresAt > now() ? await repo.latest(userKey(record.userId)) : null;
-    if (!user || user.status !== 'active' || user.securityVersion !== record.securityVersion) fail(400, 'LINK_INVALID', '链接无效或已过期，请重新申请。');
+    if (!user || user.status !== 'active' || user.securityVersion !== record.securityVersion) {
+      if (record) await repo.remove(tokenKey(token));
+      fail(400, 'LINK_INVALID', '链接无效或已过期，请重新申请。');
+    }
+    accept(user);
+    await repo.remove(tokenKey(token));
     return user;
   }
   async function deleteUser(user) {
@@ -456,8 +458,8 @@ export function createIdentity({ repo, env, now = Date.now, academicYear, mailer
       if (!bearerBootstrap(request, path)) requireOrigin(request, env);
       const body = await readJson(request, 8192);
       await repo.throttle('register-client', clientId(context), 60, 600);
-      const qq = qqValue(body.qq), password = validatePassword(body.password);
-      const studentId = normalizeStudentId(body.studentId), realName = normalizeRealName(body.realName);
+      const qq = qqValue(body.qq), studentId = normalizeStudentId(body.studentId), realName = normalizeRealName(body.realName);
+      const password = validatePassword(body.password, { studentId, qq });
       const nickname = text(body.nickname, '昵称', 40);
       await repo.throttle('register-account', qq, 3, 600);
       // Check if this studentId belongs to a pre-recorded pending account
@@ -603,8 +605,8 @@ export function createIdentity({ repo, env, now = Date.now, academicYear, mailer
       if (!bearerBootstrap(request, path)) requireOrigin(request, env);
       const body = await readJson(request, 8192);
       await repo.throttle('password-reset-client', clientId(context), 10, 600);
-      const password = validatePassword(body.password);
-      const user = await spendToken('reset', body.token);
+      const password = body.password;
+      const user = await spendToken('reset', body.token, user => validatePassword(password, user));
       await saveUser(user, { passwordHash: await hashPassword(password), mustChangePassword: false, emailVerified: true, securityVersion: secretToken() });
       await repo.audit(user.id, 'identity.password.reset_by_email', user.id);
       await tellPasswordChanged(user);
@@ -636,7 +638,7 @@ export function createIdentity({ repo, env, now = Date.now, academicYear, mailer
       const body = await readJson(request, 8192);
       await repo.throttle('password-change', auth.user.id, 5, 60);
       if (!await verifyPassword(body.currentPassword, auth.user.passwordHash)) fail(401, 'PASSWORD_INVALID', '当前密码不正确。');
-      const newPassword = validatePassword(body.newPassword);
+      const newPassword = validatePassword(body.newPassword, auth.user);
       if (auth.user.totp) requireFactorCode(body.totp);
       if (safeEqual(body.currentPassword, newPassword)) fail(400, 'PASSWORD_UNCHANGED', '新密码应与当前密码不同。');
       if (auth.user.totp) await consumeFactor(auth.user, body.totp);
@@ -811,7 +813,7 @@ export function createIdentity({ repo, env, now = Date.now, academicYear, mailer
       }
       const body = await readJson(request, 8192);
       if (management[2] === '/reset-password') {
-        const password = validatePassword(body.password);
+        const password = validatePassword(body.password, user);
         await authorizeCredentialChange(auth.user, body.totp);
         const passwordHash = await hashPassword(password);
         await saveUser(user, { passwordHash, mustChangePassword: true, securityVersion: secretToken() });

@@ -18,17 +18,17 @@ const academicYear = {
 };
 
 // The platform runs as an edge function for the requests in src/platform/server/routes.mjs and as a Node function for
-// the rest. The edge build is Web APIs only and never checks a password, so ./scrypt.mjs is swapped for a stub there.
+// the rest. The edge build is Web APIs only and never handles a password, so ./password.mjs is swapped for a stub there.
 // These outputs are server-only and contain no build-time values or credentials.
-const edgeScrypt = {
-  name: 'edge-scrypt',
+const edgePassword = {
+  name: 'edge-password',
   setup(build) {
-    build.onResolve({ filter: /\/scrypt\.mjs$/ }, () => ({ path: fileURLToPath(new URL('../../src/platform/server/scrypt.edge.mjs', import.meta.url)) }));
+    build.onResolve({ filter: /\/password\.mjs$/ }, () => ({ path: fileURLToPath(new URL('../../src/platform/server/password.edge.mjs', import.meta.url)) }));
   },
 };
 const shared = { outdir: '.server-build', outExtension: { '.js': '.mjs' }, bundle: true, external: ['@edgeone/pages-blob'], format: 'esm',
   define: { __STUDEV_ACADEMIC_YEAR__: JSON.stringify(academicYear) } };
 await build({ ...shared, entryPoints: { edge: 'src/platform/server/edge.mjs' },
-  platform: 'neutral', mainFields: ['module', 'main'], conditions: ['worker', 'browser'], target: 'es2022', plugins: [edgeScrypt] });
+  platform: 'neutral', mainFields: ['module', 'main'], conditions: ['worker', 'browser'], target: 'es2022', plugins: [edgePassword] });
 // EdgeOne's Node wrapper declares a top-level `env`; identifiers are minified so a dependency's `env` cannot collide.
 await build({ ...shared, entryPoints: { node: 'src/platform/server/node.mjs' }, platform: 'node', target: 'node20', minifyIdentifiers: true });

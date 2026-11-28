@@ -172,7 +172,7 @@ import top.hicancan.studev.world.CampusDay
                 SecretField("密码", password, !busy) { password = it; resetLoginFactor() }
                 if (register) {
                     SecretField("确认密码", confirm, !busy) { confirm = it }
-                    Text("密码需要 12–256 个字符。学号被占用时，请联系管理员核实。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("密码至少 8 位，别用生日、学号或 QQ 号。学号被占用时，请联系管理员核实。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(checked = agreed, onCheckedChange = { agreed = it }, enabled = !busy)
                         Column(Modifier.weight(1f)) {
@@ -266,7 +266,7 @@ import top.hicancan.studev.world.CampusDay
                             if (newPassword != confirm) { error = "两次输入的新密码不一致。"; return@run }
                             client.request("/auth/password", buildJsonObject { put("currentPassword", password); put("newPassword", newPassword); put("totp", totp) }, authenticated = true)
                             client.forget(); user = null; state = null; password = ""; newPassword = ""; confirm = ""; totp = ""; notice = "密码已修改，请重新登录。"
-                        } }, enabled = !busy && password.isNotBlank() && newPassword.length >= 12 && confirm.isNotBlank() && (!user!!.totpEnabled || totp.isNotBlank())) { Text("修改密码并重新登录") }
+                        } }, enabled = !busy && password.isNotBlank() && newPassword.length >= 8 && confirm.isNotBlank() && (!user!!.totpEnabled || totp.isNotBlank())) { Text("修改密码并重新登录") }
                         HorizontalDivider()
                         Text("认证器验证", style = MaterialTheme.typography.titleLarge)
                         Text(if (user!!.totpEnabled) "重新登录或修改密码时，请输入动态验证码或一次性恢复码。" else "可用支持动态验证码的认证器。", style = MaterialTheme.typography.bodyMedium)

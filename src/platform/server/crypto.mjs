@@ -1,11 +1,11 @@
 // Cryptography the platform needs, in plain JavaScript and Web Crypto, so the same code runs on the edge and in Node.
 // Hashes and MACs are synchronous (they hash a few hundred bytes); only the password function is expensive, and it
-// comes from ./scrypt.mjs, which the edge build replaces with a call to the Node function that owns it.
+// comes from ./password.mjs, which runs in the Node function alone.
 import { sha256 } from '@noble/hashes/sha2.js';
 import { sha1 } from '@noble/hashes/legacy.js';
 import { hmac as nobleHmac } from '@noble/hashes/hmac.js';
 import { bytesToHex, concatBytes, utf8ToBytes } from '@noble/hashes/utils.js';
-import { scrypt } from './scrypt.mjs';
+import { scrypt } from './password.mjs';
 
 export { bytesToHex as hex, concatBytes as concat, utf8ToBytes as utf8 };
 

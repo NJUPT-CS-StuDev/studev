@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createIdentity, normalizeRealName, normalizeStudentId } from '../server/identity.mjs';
 import { createRepository } from '../server/store.mjs';
 import { hashPassword } from '../server/crypto.mjs';
+import { passwordProblem } from '../server/password.mjs';
 import { base32Encode, decryptTotp, encryptTotp, matchedTotpCounter, totpCode } from '../server/totp.mjs';
 
 const ORIGIN = 'https://studev.example.test';
@@ -162,8 +163,19 @@ test('open registration creates ordinary users with unverified derived contact e
 
 test('password bounds and QQ validation reject malformed input before registration', async () => {
   const f = fixture();
-  for (const password of ['short', 'a'.repeat(257)]) await rejects(f.call('/auth/register', 'POST', { qq: '10000333', nickname: 'Member', password }), 'PASSWORD_POLICY', 400);
+  const person = { qq: '10000333', studentId: 'B24040333', realName: '测试成员', nickname: 'Member' };
+  for (const password of ['short7!', 'a'.repeat(257), 'woaini1314', '20050101', 'abcdefgh', 'xB24040333x', 'my10000333qq']) {
+    await rejects(f.call('/auth/register', 'POST', { ...person, password }), 'PASSWORD_POLICY', 400);
+  }
   await rejects(f.call('/auth/register', 'POST', { qq: '1234@qq.com', nickname: 'Member', password: MEMBER_PASSWORD }), 'INVALID_QQ', 400);
+});
+
+test('the password rule turns away what people guess first and lets ordinary eight-character passwords through', () => {
+  for (const password of ['short7!', '12345678', '13912345678', '87654321', 'aaaaaaaa', 'abababab', 'Password', '1qaz2wsx', 'qwertyuiop']) {
+    assert.notEqual(passwordProblem(password), '', password);
+  }
+  assert.notEqual(passwordProblem('B24040333-ok', { studentId: 'b24040333' }), '');
+  for (const password of ['xiaoming!7', 'Lan9shan8', '123456789012x', 'tea4two&me']) assert.equal(passwordProblem(password), '', password);
 });
 
 test('all identity mutations require exact Origin and authenticated mutations also require CSRF', async () => {
@@ -405,6 +417,9 @@ test('a reset link mailed to the account sets a new password once, signs every d
   assert.match(letter.text, /https:\/\/studev\.example\.test\/login\/\?reset=/);
   const token = box.link('reset');
   await rejects(call('/auth/password/forgot', 'POST', { studentId: auth.user.studentId }), 'RATE_LIMITED', 429);
+  // A password the rule turns away leaves the link usable, so the student just picks another one.
+  await rejects(call('/auth/password/reset', 'POST', { token, password: 'woaini1314' }), 'PASSWORD_POLICY', 400);
+  await rejects(call('/auth/password/reset', 'POST', { token, password: auth.user.studentId + '!x' }), 'PASSWORD_POLICY', 400);
   const reset = await call('/auth/password/reset', 'POST', { token, password: 'a-brand-new-password-456' });
   assert.equal(reset.status, 200);
   assert.equal(reset.studentId, auth.user.studentId);
