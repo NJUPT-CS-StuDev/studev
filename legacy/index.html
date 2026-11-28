@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="StuDev 已迁移至 studev.cn。">
+  <meta name="robots" content="noindex, follow">
+  <meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#121416" media="(prefers-color-scheme: dark)">
+  <link rel="icon" type="image/png" href="/logo.png">
+  <link rel="canonical" href="https://studev.cn/">
+  <title>StuDev 搬家啦</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --paper: #FFFFFF;
+      --ink: #1B1D20;
+      --muted: #62666C;
+      --brand: #1F6FEB;
+      --on-brand: #FFFFFF;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      color: var(--ink);
+      background: var(--paper);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root { color-scheme: dark; --paper: #121416; --ink: #ECEEF0; --muted: #A3A8AE; --brand: #5B9BFF; --on-brand: #0B1320; }
+    }
+    * { box-sizing: border-box; }
+    body { display: grid; place-items: center; margin: 0; min-height: 100vh; min-height: 100svh; line-height: 1.65; }
+    main { width: min(100%, 36rem); padding: 48px 24px; text-align: center; }
+    .mark { display: block; margin: 0 auto 20px; border-radius: 13px; }
+    h1 { margin: 0; font-size: clamp(26px, 5vw, 36px); font-weight: 600; line-height: 1.32; letter-spacing: -.025em; }
+    p { margin: 10px auto 0; color: var(--muted); font-size: 15px; }
+    .lead { color: var(--ink); font-size: 17px; }
+    .domain { white-space: nowrap; font-weight: 600; color: var(--ink); }
+    .enter { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; margin-top: 24px; padding: 8px 20px; border-radius: 999px; color: var(--on-brand); background: var(--brand); text-decoration: none; font-size: 15px; font-weight: 600; }
+    .enter:hover { background: color-mix(in srgb, var(--brand) 88%, var(--ink)); }
+    .enter:focus-visible { outline: 2px solid var(--brand); outline-offset: 4px; }
+    .soon { margin-top: 12px; font-size: 13px; }
+    .notes { margin-top: 32px; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <main>
+    <img class="mark" src="/logo.png" alt="StuDev" width="56" height="56">
+    <h1>Hi，老朋友，我们搬家了！</h1>
+    <p class="lead">StuDev 有了自己的新家：<span class="domain">studev.cn</span></p>
+    <p>课表、地图、搜索和收集都在那里，地址更短，也更好记。<br>新域名由 hicancan 为爱发电，StuDev 依旧免费、开源、没有广告。</p>
+    <a class="enter" id="enter" href="https://studev.cn/">前往 studev.cn</a>
+    <p class="soon" id="soon" aria-live="polite">6 秒后自动带你过去</p>
+    <p class="notes">网页版需要在新地址重新登录一次，装在桌面上的网页版请从新地址重新添加。<br>App 用户在「我的」里更新到最新版就好。</p>
+  </main>
+  <script>
+    // The same page on the new site: an old bookmark or shared link still lands where it meant to.
+    const target = 'https://studev.cn' + location.pathname + location.search + location.hash;
+    document.getElementById('enter').href = target;
+    let left = 6;
+    const soon = document.getElementById('soon');
+    const tick = setInterval(() => {
+      left -= 1;
+      if (left > 0) soon.textContent = left + ' 秒后自动带你过去';
+      else { clearInterval(tick); location.replace(target); }
+    }, 1000);
+  </script>
+</body>
+</html>
